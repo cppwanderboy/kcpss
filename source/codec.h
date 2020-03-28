@@ -52,4 +52,30 @@ private:
   static const uint8_t g_decoder[];
 };
 
+class fast_codec : public codec {
+public:
+  void encode(unsigned char *buffer, int size) override {
+    int i = 0;
+    for (; i + 8 < size; i += 8) {
+      uint64_t *ch    = (uint64_t *)(&buffer[i]);
+      uint64_t  left  = (*ch & 0xf0f0f0f0f0f0f0f0) >> 4;
+      uint64_t  right = (*ch & 0x0f0f0f0f0f0f0f0f) << 4;
+      *ch             = left | right;
+    }
+    for (; i + 4 < size; i += 4) {
+      uint32_t *ch    = (uint32_t *)(&buffer[i]);
+      uint32_t  left  = (*ch & 0xf0f0f0f0) >> 4;
+      uint32_t  right = (*ch & 0x0f0f0f0f) << 4;
+      *ch             = left | right;
+    }
+    for (; i < size; ++i) {
+      uint8_t ch = buffer[i];
+      ch         = (ch << 4) | (ch >> 4);
+      buffer[i]  = ch;
+    }
+  }
+
+  void decode(unsigned char *buffer, int size) override { encode(buffer, size); }
+};
+
 #endif  // KCPSS_CODEC_H

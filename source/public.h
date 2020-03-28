@@ -24,13 +24,16 @@
 #define KCPSS_PUBLIC_H
 
 #include <unistd.h>
+#include <netdb.h>
+#include <fcntl.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
-#include <netinet/tcp.h>
 
 #include <set>
+#include <vector>
 #include <functional>
 #include <iostream>
 #include <unordered_map>

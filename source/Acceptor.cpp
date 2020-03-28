@@ -138,10 +138,50 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   , bytes_write_(0)
   , bytes_read_(0)
   , kcp_mode_(EKcpMode::None)
-  , connected_(true) {
+  , connected_(false)
+  , reconnect_count_(0) {
   LOG_INFO << __FUNCTION__ << " fd = " << fd_;
+
+  recv_buffer_ = new unsigned char[SIZE_16M];
+  send_buffer_.reserve(SIZE_1M);
+  channels_.insert(this);
+
   Reactor::Callback cb = std::bind(&Channel::read, this, std::placeholders::_1);
   reactor_->RegisterIO(cb, fd_);
+
+  on_connect(kcpConv);
+}
+
+int Channel::on_connect(int kcpConv) {
+  struct timeval tval {};
+  fd_set         wset;
+  FD_ZERO(&wset);
+  FD_SET(fd_, &wset);
+  tval.tv_sec  = 0;
+  tval.tv_usec = 100;
+  int error    = ::select(fd_ + 1, nullptr, &wset, nullptr, &tval);
+  if (error == 0) {
+    LOG_INFO << "select timeout, fd=" << fd_;
+  }
+  if (!FD_ISSET(fd_, &wset)) {
+    if (++reconnect_count_ > 10) {
+      reactor_->RemoveTimer(1000 + fd_);
+      on_disconnect();
+      return -1;
+    }
+    Reactor::Callback cb = std::bind(&Channel::on_connect, this, kcpConv);
+    reactor_->RegisterTimer(cb, 1000 + fd_, 0, 0.1);
+    return 0;
+  }
+  LOG_INFO << "fd[" << fd_ << "] connected to the server success";
+  if (reconnect_count_ > 0) {
+    reactor_->RemoveTimer(1000 + fd_);
+  }
+  int flags = fcntl(fd_, F_GETFL, 0);
+  flags     = ~O_NONBLOCK & flags;
+  fcntl(fd_, F_SETFL, flags);
+
+  connected_ = true;
 
   if (kcpConv > 0) {
     kcp_mode_ = EKcpMode::Initiative;
@@ -149,9 +189,11 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   } else if (kcpConv == 0) {
     kcp_mode_ = EKcpMode::Passive;
   }
-  channels_.insert(this);
-
-  recv_buffer_ = new unsigned char[SIZE_16M];
+  if (!send_buffer_.empty()) {
+    write(send_buffer_.data(), send_buffer_.size());
+    send_buffer_.clear();
+  }
+  return 0;
 }
 
 void writelog(const char *log, struct IKCPCB *kcp, void *user) {
@@ -222,7 +264,7 @@ bool Channel::set_read_callback(Channel::ReadCallbck &cb) {
 }
 
 void Channel::on_read(unsigned char *buffer, int size) {
-  LOG_DBUG << "fd[" << fd() << "] on read " << size;
+  LOG_INFO << "fd[" << fd() << "] on read " << size;
   if (kcp_mode_ == Passive && bytes_read_ == 0) {
     kcpConv_ = *(int *)buffer;
     LOG_INFO << "[fd=" << fd_ << "] recv negotiate kcpConv=" << kcpConv_;
@@ -230,7 +272,9 @@ void Channel::on_read(unsigned char *buffer, int size) {
     buffer += sizeof(int);
     size -= sizeof(int);
     bytes_read_ += size;
-    (*read_cb_)(buffer, size);
+    if (read_cb_) {
+      (*read_cb_)(buffer, size);
+    }
     return;
   }
   if (read_cb_) {
@@ -252,6 +296,11 @@ void Channel::on_read(unsigned char *buffer, int size) {
 }
 
 int Channel::write(unsigned char *buf, int size) {
+  if (!connected_) {
+    LOG_INFO << "write but fd[" << fd_ << "] not connected, push to buffer";
+    send_buffer_.insert(send_buffer_.end(), buf, buf + size);
+    return 0;
+  }
   if (kcp_mode_ == Initiative && (bytes_write_ == 0)) {
     LOG_INFO << "[fd=" << fd_ << "] send negotiate kcpConv=" << kcpConv_;
     auto *data = new unsigned char[size + sizeof(int)];
@@ -269,6 +318,7 @@ int Channel::write(unsigned char *buf, int size) {
   if (kcp_) {
     return ikcp_send(kcp_, (char *)buf, size);
   } else {
+    int flags = fcntl(fd_, F_GETFL, 0);
     LOG_INFO << "[fd=" << fd_ << "] send " << size;
     return ::write(fd_, buf, size);
   }

@@ -56,6 +56,7 @@ public:
 protected:
   virtual int  read(int fd);
   int          write(unsigned char *buf, int size);
+  virtual int  on_connect(int kcpConv);
   virtual int  on_disconnect();
   virtual void on_read(unsigned char *buffer, int size);
 
@@ -75,6 +76,8 @@ protected:
   EKcpMode                   kcp_mode_;
   static std::set<Channel *> channels_;
   unsigned char *            recv_buffer_;
+  std::vector<unsigned char> send_buffer_;
+  int                        reconnect_count_;
 };
 
 class Acceptor {

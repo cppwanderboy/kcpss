@@ -46,6 +46,13 @@ public:
     memcpy(&sockaddr_, &addr, sizeof(sockaddr_in));
   }
 
+  endpoint(const char *prorocol, const char *ip, int port) : port_(port), host_(ip) {
+    memset(&sockaddr_, 0, sizeof(struct sockaddr_in));
+    sockaddr_.sin_family      = AF_INET;
+    sockaddr_.sin_port        = htons(port);
+    sockaddr_.sin_addr.s_addr = inet_addr(ip);
+  }
+
   int port() const { return port_; }
 
   int port(int port) {
@@ -101,20 +108,28 @@ public:
       LOG_CRIT << "socket creation failed";
       exit(0);
     } else {
-      LOG_INFO << "socket successfully created, fd = " << fd;
+      LOG_INFO << "socket successfully created, fd=" << fd << ", connect to " << ep.host() << ":"
+               << ep.port();
       int flag    = 1;
       int bufsize = SIZE_16M;
       setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
       setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
       setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag));
+      int flags = fcntl(fd, F_GETFL, 0);
+      fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     }
 
-    if (connect(fd, reinterpret_cast<const sockaddr *>(ep.sockaddr()), sizeof(sockaddr_in)) != 0) {
-      LOG_CRIT << "connection with the remote_channel server failed";
-      exit(0);
-    } else {
-      LOG_INFO << "connected to the server, fd = " << fd;
+    int res = ::connect(fd, reinterpret_cast<const sockaddr *>(ep.sockaddr()), sizeof(sockaddr_in));
+    if (res < 0 && errno != EINPROGRESS) {
+      LOG_WARN << "connection with the remote server failed: " << ep.host() << ":" << ep.port();
+      return fd;
+    }
+
+    if (res == 0) {
+      LOG_INFO << "connected to the server, fd[" << fd << "]" << ep.host() << ":" << ep.port();
+    } else {  // connection attempt is in progress
+      LOG_INFO << "fd[" << fd << "] connect " << ep.host() << ":" << ep.port() << " in processing";
     }
     return fd;
   }
