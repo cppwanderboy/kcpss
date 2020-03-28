@@ -1,0 +1,46 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [ master, fast ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    name: ${{ matrix.os }}-cmake-build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            CC: gcc
+          - os: macos-latest
+            CC: clang
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: install on linux
+      run: sudo apt-get -y install libev-dev
+      if: "contains( matrix.os, 'ubuntu')"
+      
+    - name: install on macos
+      run: brew install libev
+      if: "contains( matrix.os, 'macos')"
+
+    - name: Build project
+      uses: nicledomaS/cmake_build_action@v1
+      with:
+        config: Release
+        package_generator: TGZ
+        create_package: OFF
+        submodule_update: ON
+        run_tests: OFF
+        unit_test_build: -Dtest=ON
