@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#include "config.h"
+#include "ini.h"
 #include "udp.h"
 #include "public.h"
 #include "codec.h"
@@ -27,8 +29,8 @@
 #include "snappy.h"
 
 struct config {
-  const char *local;
-  const char *remote;
+  std::string local;
+  std::string remote;
   codec *     remote_codec;
 };
 
@@ -178,37 +180,76 @@ private:
 
 void start_server(const config &proxy_config) {
   auto *     reactor = new Reactor;
-  udp_server rsp(proxy_config.local, proxy_config.remote, reactor, proxy_config.remote_codec);
+  udp_server rsp(
+    proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
   reactor->Run();
 }
 
 void start_client(const config &proxy_config) {
   auto *reactor = new Reactor;
   auto *server  = new Acceptor(reactor, NoKcp);
-  server->listen(endpoint(proxy_config.local).port());
-  udp_client rsp(proxy_config.local, proxy_config.remote, reactor, proxy_config.remote_codec);
+  server->listen(endpoint(proxy_config.local.c_str()).port());
+  udp_client rsp(
+    proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
   Channel::Callback cb = std::bind(&udp_client::accepted, &rsp, _1);
   server->set_connect_callback(cb);
   server->start();
 }
 
+config parse_config(const char *config_file, std::string &modeString) {
+  inipp::Ini<char> iniConfig;
+  std::ifstream    is(config_file);
+  if (!is.is_open()) {
+    fprintf(stderr, "[Exit] Can't open config file %s\n", config_file);
+    exit(0);
+  }
+  iniConfig.parse(is);
+
+  config run_config;
+  if (modeString == "server") {
+    run_config.local  = iniConfig.sections["server"]["local"];
+    run_config.remote = "";
+  } else if (modeString == "client") {
+    run_config.local  = iniConfig.sections["client"]["local"];
+    run_config.remote = iniConfig.sections["client"]["remote"];
+  }
+  run_config.remote_codec = new fast_codec;
+  return run_config;
+}
+
+const char *usage = "Usage: %s [-s] [-c] [-h] [-v]\n";
+
 int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
 
-  mlog::set_level(mlog::LogLevel::CRIT);
+  const char *configFile = "./kcpss.ini";
 
-  auto reactor = new Reactor;
-
-  config client_config = {"tcp://192.168.1.3:1088", "udp://192.168.1.3:4088", new simple_codec};
-  config server_config = {"udp://192.168.1.3:4088", "tcp://192.168.1.12:43341", nullptr};
-
-  if (argc == 2) {
-    std::string mode(argv[1]);
-    if (mode == "-c") {
-      start_client(client_config);
-    } else if (mode == "-s") {
-      start_server(server_config);
+  std::string modeString;
+  int         opt;
+  while ((opt = getopt(argc, argv, "scvh?")) != -1) {
+    switch (opt) {
+      case 's':
+        modeString = "server";
+        break;
+      case 'c':
+        modeString = "client";
+        break;
+      case 'v':
+        printf("kcpss version %s\n", PROJECT_VERSION);
+        printf("commit [%s]@%s %s\n", GIT_HASH, GIT_BRANCH, GIT_MESSAGE);
+        exit(0);
+      default: /* '?' */
+        fprintf(stderr, usage, argv[0]);
+        exit(EXIT_FAILURE);
     }
   }
-  reactor->Run();
+
+  mlog::set_level(mlog::LogLevel::CRIT);
+
+  config run_config = parse_config(configFile, modeString);
+  if (modeString == "server") {
+    start_server(run_config);
+  } else if (modeString == "client") {
+    start_client(run_config);
+  }
 }

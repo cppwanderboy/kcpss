@@ -1,6 +1,40 @@
 cmake_minimum_required(VERSION 3.0)
 project(kcpss)
 
+# version info ================================================================
+set(kcpss_VERSION_MAJOR 0)
+set(kcpss_VERSION_MINOR 1)
+set(kcpss_VERSION_PATCH 0)
+
+string(TIMESTAMP BUILDTIME "%Y%m%d-%H:%M:%S")
+set(kcpss_VERSION ${kcpss_VERSION_MAJOR}.${kcpss_VERSION_MINOR}.${kcpss_VERSION_PATCH})
+set(kcpss_SO_VERSION ${kcpss_VERSION_MAJOR}.${kcpss_VERSION_MINOR})
+set(kcpss_BUILD_VERSION ${kcpss_VERSION}-${BUILDTIME})
+
+# Get the current working branch
+execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Get the latest abbreviated commit hash of the working branch
+execute_process(
+    COMMAND git log -1 --format=%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Get the latest commit subject of the working branch
+execute_process(
+    COMMAND git log -1 --format=%s
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_MESSAGE
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 set(CMAKE_CXX_STANDARD 11)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined,vptr -fsanitize-recover=address -fsanitize-address-use-after-scope")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIE")
@@ -41,8 +75,10 @@ if (NOT WIN32)
   set(BoldWhite "${Esc}[1;37m")
 endif ()
 
+configure_file(source/config.h.in ${CMAKE_SOURCE_DIR}/source/config.h)
 include_directories(/usr/local/include)
 include_directories(depends/kcp)
+include_directories(depends/ini)
 include_directories(depends/snappy)
 
 link_directories(/usr/local/lib)
@@ -66,3 +102,28 @@ if (EXISTS ${CLANG_FORMAT_BIN})
   )
   add_dependencies(kcpss clang-format)
 endif ()
+
+# install =====================================================================
+set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
+install(TARGETS kcpss DESTINATION bin)
+install(FILES bin/kcpss.ini DESTINATION etc)
+
+# packing =====================================================================
+set(CPACK_PACKAGE_NAME "kcpss")
+set(CPACK_PACKAGE_VENDOR "Gui Yang(yanggui1989@gmail.com)")
+set(CPACK_PACKAGE_CONTACT "Gui Yang(yanggui1989@gmail.com)")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "kcpss - a fast socks5 proxy")
+set(CPACK_PACKAGE_VERSION ${kcpss_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR ${kcpss_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${kcpss_VERSION_MINOR})
+#set(CPACK_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION})
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "CPack Component Example")
+
+set(CPACK_CMAKE_GENERATOR "Unix Makefiles")
+set(CPACK_GENERATOR "TGZ;RPM;DEB")
+set(CPACK_RPM_CHANGELOG_FILE "${CMAKE_SOURCE_DIR}/ChangeLog.txt")
+set(CPACK_RPM_PACKAGE_ARCHITECTURE ${CMAKE_SYSTEM_PROCESSOR})
+set(CPACK_RPM_PACKAGE_GROUP "Applications/Internet")
+set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY} ${RELEASE_DESCRIB})
+
+include(CPack)
