@@ -31,7 +31,7 @@
 struct config {
   std::string local;
   std::string remote;
-  codec *     remote_codec;
+  codec *     remote_codec{};
 };
 
 class udp_client {
@@ -115,11 +115,6 @@ public:
       }
       return udp_.send(sid, const_cast<unsigned char *>(rsp), 10);
     }
-  }
-
-  Channel *create_remote_channel() {
-    int fd_ = socket::create_tcp(remote_);
-    return new Channel(reactor_, fd_, -1);
   }
 
   int remote_in(unsigned char *buffer, int size, int sid) {

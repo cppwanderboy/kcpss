@@ -41,7 +41,16 @@ Acceptor::Acceptor(Reactor *reactor, EKcpDirection kcpDirection)
   }
 }
 
-Acceptor::~Acceptor() = default;
+Acceptor::~Acceptor() {
+  if (connect_cb_) {
+    delete connect_cb_;
+    connect_cb_ = nullptr;
+  }
+  if (disconnect_cb_) {
+    delete disconnect_cb_;
+    disconnect_cb_ = nullptr;
+  }
+}
 
 int Acceptor::listen(int port) {
   struct sockaddr_in me {};

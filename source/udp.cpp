@@ -40,6 +40,14 @@ udp::udp(Reactor *reactor, const char *addr, const char *remote_addr)
 }
 
 udp::~udp() {
+  if (target_) {
+    delete target_;
+    target_ = nullptr;
+  }
+  if (cb_) {
+    delete cb_;
+    cb_ = nullptr;
+  }
   delete[](char *) segment_;
   delete[] recv_bufffer_;
 }

@@ -1183,7 +1183,7 @@ IUINT32 ikcp_check(const ikcpcb *kcp, IUINT32 current) {
 
 int ikcp_setmtu(ikcpcb *kcp, int mtu) {
   char *buffer;
-  if (mtu < 50 || mtu < (int)IKCP_OVERHEAD)
+  if (mtu < (int)IKCP_OVERHEAD)
     return -1;
   buffer = (char *)ikcp_malloc((mtu + IKCP_OVERHEAD) * 3);
   if (buffer == NULL)
