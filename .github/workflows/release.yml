@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: ${{ matrix.os }}-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            CC: gcc
+          - os: macos-latest
+            CC: clang
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: install on linux
+        run: sudo apt-get -y install libev-dev
+        if: "contains( matrix.os, 'ubuntu')"
+
+      - name: install on macos
+        run: brew install libev
+        if: "contains( matrix.os, 'macos')"
+
+      - name: Build project
+        uses: nicledomaS/cmake_build_action@v1
+        with:
+          config: Release
+          package_generator: TGZ
+          create_package: ON
+          submodule_update: ON
+          run_tests: OFF
+          unit_test_build: -Dtest=ON
+
+      - name: Pack project
+        run: cd build && cpack -G TGZ
+
+      - name: Set version
+        run: echo ::set-env name=ARTIFACT_VERSION::$(ls ./build/*.gz | cut -d'/' -f3 )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: ${{ env.ARTIFACT_VERSION }}
+          path: build/*.tar.gz
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: true

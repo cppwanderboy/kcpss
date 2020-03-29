@@ -1,9 +1,5 @@
-# This is a basic workflow to help you get started with Actions
-
 name: CI
 
-# Controls when the action will run. Triggers the workflow on push or pull request
-# events but only for the master branch
 on:
   push:
     branches: [ master, fast ]
@@ -44,15 +40,3 @@ jobs:
         submodule_update: ON
         run_tests: OFF
         unit_test_build: -Dtest=ON
-
-    - name: Pack project
-      run: cd build && cpack -G TGZ
-
-    - name: Set version
-      run: echo ::set-env name=ARTIFACT_VERSION::$(ls ./build/*.gz | cut -d'/' -f3 )
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v2-preview
-      with:
-        name: ${{ env.ARTIFACT_VERSION }}
-        path: build/*.tar.gz
