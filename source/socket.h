@@ -64,6 +64,9 @@ public:
 
   sockaddr_in *sockaddr() { return &sockaddr_; }
 
+  static endpoint null() { return endpoint("", "", -1); }
+  bool            is_null() { return port_ == -1 && host_.empty(); }
+
 private:
   int                port_;
   std::string        host_;

@@ -31,6 +31,13 @@ public:
   virtual void decode(unsigned char *buffer, int size) = 0;
 };
 
+class null_codec : public codec {
+public:
+  void encode(unsigned char *buffer, int size) override {}
+
+  void decode(unsigned char *buffer, int size) override {}
+};
+
 class simple_codec : public codec {
 public:
   void encode(unsigned char *buffer, int size) override {

@@ -26,7 +26,7 @@
 #include "public.h"
 #include "codec.h"
 #include "Acceptor.h"
-#include "snappy.h"
+#include "socks5.h"
 
 struct config {
   std::string local;
@@ -34,18 +34,21 @@ struct config {
   codec *     remote_codec{};
 };
 
-class udp_client {
+class proxy_client {
 public:
-  udp_client(const char *local, const char *remote, Reactor *reactor, codec *remote_codec = nullptr)
-    : udp_(reactor, local, remote), codec_(remote_codec), global_sid_(0) {
-    udp::SessionCallbck cb = std::bind(&udp_client::remote_in, this, _1, _2, _3);
+  proxy_client(const char *local,
+               const char *remote,
+               Reactor *   reactor,
+               codec *     codec = new null_codec)
+    : udp_(reactor, local, remote), codec_(codec), max_sid_(0) {
+    codec_                 = codec ? codec : new null_codec;
+    udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3);
     udp_.set_session_callback(cb);
   }
 
   int remote_in(int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
-    if (codec_)
-      codec_->decode(buffer, size);
+    codec_->decode(buffer, size);
     if (channels_.find(sid) != channels_.end()) {
       return Channel::write(channels_[sid], buffer, size);
     }
@@ -54,25 +57,22 @@ public:
 
   int local_in(int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
-    if (size == 3 && buffer[0] == 5 && buffer[1] == 1) {
+    if (socks5::is_hello(buffer, size)) {
       // fast return to skip socks5 negotiate & reduce 1 RTT time.
-      buffer[1] = 0;
-      size      = 2;
+      socks5::echo_hello(buffer, &size);
       return Channel::write(channels_[sid], buffer, size);
     }
-    if (codec_)
-      codec_->encode(buffer, size);
+    codec_->encode(buffer, size);
     return udp_.send(sid, buffer, size);
   }
 
   int accepted(Channel *channel) {
-    int sid = global_sid_++;
+    int sid = max_sid_++;
     LOG_INFO << "Connection accept, fd=" << channel->fd() << ", sid=" << sid;
     channels_[sid] = channel;
 
-    Channel::ReadCallbck local_in_cb = std::bind(&udp_client::local_in, this, sid, _1, _2);
-    channel->set_read_callback(local_in_cb);
-
+    Channel::ReadCallbck cb = std::bind(&proxy_client::local_in, this, sid, _1, _2);
+    channel->set_read_callback(cb);
     return 0;
   }
 
@@ -80,89 +80,51 @@ private:
   udp                                udp_;
   codec *                            codec_;
   std::unordered_map<int, Channel *> channels_;
-  int                                global_sid_;
+  int                                max_sid_;
 };
 
-class udp_server {
+class proxy_server {
 public:
-  udp_server(const char *local, const char *remote, Reactor *reactor, codec *remote_codec = nullptr)
-    : udp_(reactor, local), remote_(remote), reactor_(reactor), codec_(remote_codec) {
-    udp::SessionCallbck cb = std::bind(&udp_server::loacl_in, this, _1, _2, _3);
+  proxy_server(const char *local,
+               const char *remote,
+               Reactor *   reactor,
+               codec *     codec = new null_codec)
+    : udp_(reactor, local), remote_(remote), reactor_(reactor), codec_(codec) {
+    codec_                 = codec ? codec : new null_codec;
+    udp::SessionCallbck cb = std::bind(&proxy_server::loacl_in, this, _1, _2, _3);
     udp_.set_session_callback(cb);
   }
 
   int loacl_in(int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
-    if (codec_)
-      codec_->decode(buffer, size);
-    if (channels_.find(sid) != channels_.end()) {
+    codec_->decode(buffer, size);
+    bool new_request = channels_.find(sid) == channels_.end();
+    if (!new_request) {
       return Channel::write(channels_[sid], buffer, size);
     } else {
-      auto *remote_channel = handle_socks5(buffer, size);
-      if (!remote_channel) {
-        unsigned char rsp[] = {0x05, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        if (codec_) {
-          codec_->encode(rsp, 10);
+      auto target = socks5::parser_endpoint_from_request(buffer, size);
+      bool is_ok  = !target.is_null();
+      if (is_ok) {
+        int   fd             = socket::create_tcp(target);
+        auto *remote_channel = new Channel(reactor_, fd, -1);
+        is_ok                = (remote_channel != nullptr);
+        if (is_ok) {
+          Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, _1, _2, sid);
+          remote_channel->set_read_callback(cb);
+          channels_[sid] = remote_channel;
         }
-        return udp_.send(sid, const_cast<unsigned char *>(rsp), 10);
       }
-      Channel::ReadCallbck remote_in_cb = std::bind(&udp_server::remote_in, this, _1, _2, sid);
-      remote_channel->set_read_callback(remote_in_cb);
-      channels_[sid]      = remote_channel;
-      unsigned char rsp[] = {0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-      if (codec_) {
-        codec_->encode(rsp, 10);
-      }
-      return udp_.send(sid, const_cast<unsigned char *>(rsp), 10);
+      unsigned char rsp[16];
+      int           rsp_size = socks5::prepare_response(rsp, is_ok);
+      codec_->encode(rsp, rsp_size);
+      return udp_.send(sid, const_cast<unsigned char *>(rsp), rsp_size);
     }
   }
 
   int remote_in(unsigned char *buffer, int size, int sid) {
     LOG_INFO << "SID[" << sid << "] remote in " << size;
-    if (codec_) {
-      codec_->encode(buffer, size);
-    }
+    codec_->encode(buffer, size);
     return udp_.send(sid, buffer, size);
-  }
-
-protected:
-  struct socks5_header {
-    uint8_t version;
-    uint8_t cmd;
-    uint8_t reserved;
-    uint8_t addr_type;
-    char    addr[];
-  };
-
-  Channel *handle_socks5(unsigned char *buffer, int size) {
-    auto *header = reinterpret_cast<socks5_header *>(buffer);
-    if (header->cmd != 1) {
-      return nullptr;
-    }
-    char *          ip   = header->addr + 1;
-    uint8_t         high = *(uint8_t *)(buffer + size - 2);
-    uint8_t         low  = *(uint8_t *)(buffer + size - 1);
-    int             port = high << 8 | low;
-    struct hostent *host;
-    switch (header->addr_type) {
-      case 1:  // ipv4
-        break;
-      case 3:  // domain
-        *(uint8_t *)(buffer + size - 2) = 0;
-        host                            = gethostbyname(ip);
-        if (host == nullptr) {  // unknown host
-          return nullptr;
-        }
-        ip = inet_ntoa(*(struct in_addr *)((host)->h_addr_list[0]));
-        break;
-      case 4:  // ipv6
-        *(ip + 16) = 0;
-        break;
-      default:
-        return nullptr;
-    }
-    int fd = socket::create_tcp(endpoint("tcp", ip, port));
-    return new Channel(reactor_, fd, -1);
   }
 
 private:
@@ -174,8 +136,8 @@ private:
 };
 
 void start_server(const config &proxy_config) {
-  auto *     reactor = new Reactor;
-  udp_server rsp(
+  auto *       reactor = new Reactor;
+  proxy_server rsp(
     proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
   reactor->Run();
 }
@@ -184,9 +146,9 @@ void start_client(const config &proxy_config) {
   auto *reactor = new Reactor;
   auto *server  = new Acceptor(reactor);
   server->listen(endpoint(proxy_config.local.c_str()).port());
-  udp_client rsp(
+  proxy_client rsp(
     proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
-  Channel::Callback cb = std::bind(&udp_client::accepted, &rsp, _1);
+  Channel::Callback cb = std::bind(&proxy_client::accepted, &rsp, _1);
   server->set_connect_callback(cb);
   server->start();
 }
