@@ -182,7 +182,7 @@ void start_server(const config &proxy_config) {
 
 void start_client(const config &proxy_config) {
   auto *reactor = new Reactor;
-  auto *server  = new Acceptor(reactor, NoKcp);
+  auto *server  = new Acceptor(reactor);
   server->listen(endpoint(proxy_config.local.c_str()).port());
   udp_client rsp(
     proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);

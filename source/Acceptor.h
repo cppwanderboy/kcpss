@@ -26,15 +26,6 @@
 #include "public.h"
 #include "Reactor.h"
 
-enum EKcpDirection { NoKcp = 0, InKcp, OutKcp, BothKcp };
-
-enum EKcpMode {
-  None = 0,
-  Initiative,
-  Passive,
-
-};
-
 class Channel {
 public:
   using Callback    = std::function<int(Channel *)>;
@@ -73,7 +64,6 @@ protected:
   int                        ms_;
   size_t                     bytes_read_;
   size_t                     bytes_write_;
-  EKcpMode                   kcp_mode_;
   static std::set<Channel *> channels_;
   unsigned char *            recv_buffer_;
   std::vector<unsigned char> send_buffer_;
@@ -82,7 +72,7 @@ protected:
 
 class Acceptor {
 public:
-  Acceptor(Reactor *reactor = nullptr, EKcpDirection kcpDirection = EKcpDirection::NoKcp);
+  Acceptor(Reactor *reactor = nullptr);
   virtual ~Acceptor();
 
   virtual int listen(int port);
@@ -98,7 +88,6 @@ protected:
   virtual int on_disconnect(Channel *channel);
 
 private:
-  EKcpDirection      kcpDirection_;
   int                listenFd_;
   Reactor *          reactor_;
   Channel::Callback *connect_cb_;
