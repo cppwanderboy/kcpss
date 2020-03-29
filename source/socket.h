@@ -27,6 +27,7 @@
 
 class endpoint {
 public:
+  endpoint() : path_(""), port_(0), host_("") { memset(&sockaddr_, 0, sizeof(struct sockaddr_in)); }
   endpoint(const char *path) : path_(path) {
     char         type[32]  = {0};
     char         host[256] = {0};
@@ -53,6 +54,23 @@ public:
     sockaddr_.sin_addr.s_addr = inet_addr(ip);
   }
 
+  endpoint(const endpoint &other) : port_(other.port_), path_(other.path_), host_(other.host_) {
+    memcpy(&sockaddr_, &other.sockaddr_, sizeof(sockaddr_));
+  }
+
+  endpoint &operator=(const endpoint &other) {
+    port_ = other.port_;
+    path_ = other.path_;
+    host_ = other.host_;
+    memcpy(&sockaddr_, &other.sockaddr_, sizeof(sockaddr_));
+
+    return *this;
+  }
+
+  bool operator==(const endpoint &other) const {
+    return memcmp(&sockaddr_, &other.sockaddr_, sizeof(sockaddr_)) == 0;
+  }
+
   int port() const { return port_; }
 
   int port(int port) {
@@ -62,7 +80,7 @@ public:
 
   const char *host() const { return host_.c_str(); }
 
-  sockaddr_in *sockaddr() { return &sockaddr_; }
+  const sockaddr_in *sockaddr() const { return &sockaddr_; }
 
   static endpoint null() { return endpoint("", "", -1); }
   bool            is_null() { return port_ == -1 && host_.empty(); }
@@ -105,7 +123,7 @@ public:
     return fd;
   }
 
-  static int create_tcp(endpoint ep) {
+  static int create_tcp(const endpoint &ep) {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
       LOG_CRIT << "socket creation failed";
@@ -137,5 +155,20 @@ public:
     return fd;
   }
 };
+namespace std {
+
+template<>
+struct hash<endpoint> {
+  std::size_t operator()(const endpoint &key) const {
+    in_addr  addr   = key.sockaddr()->sin_addr;
+    uint32_t port   = key.port();
+    uint64_t unique = *(uint32_t *)(&addr);
+    unique          = (unique << 32) | port;
+
+    return std::hash<uint64_t>()(unique);
+  }
+};
+
+}  // namespace std
 
 #endif  // KCPSS_SOCKET_H

@@ -42,11 +42,11 @@ public:
                codec *     codec = new null_codec)
     : udp_(reactor, local, remote), codec_(codec), max_sid_(0) {
     codec_                 = codec ? codec : new null_codec;
-    udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3);
+    udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
   }
 
-  int remote_in(int sid, unsigned char *buffer, int size) {
+  int remote_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
     codec_->decode(buffer, size);
     if (channels_.find(sid) != channels_.end()) {
@@ -63,7 +63,7 @@ public:
       return Channel::write(channels_[sid], buffer, size);
     }
     codec_->encode(buffer, size);
-    return udp_.send(sid, buffer, size);
+    return udp_.send(-1, sid, buffer, size);
   }
 
   int accepted(Channel *channel) {
@@ -91,11 +91,11 @@ public:
                codec *     codec = new null_codec)
     : udp_(reactor, local), remote_(remote), reactor_(reactor), codec_(codec) {
     codec_                 = codec ? codec : new null_codec;
-    udp::SessionCallbck cb = std::bind(&proxy_server::loacl_in, this, _1, _2, _3);
+    udp::SessionCallbck cb = std::bind(&proxy_server::loacl_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
   }
 
-  int loacl_in(int sid, unsigned char *buffer, int size) {
+  int loacl_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
     codec_->decode(buffer, size);
     bool new_request = channels_.find(sid) == channels_.end();
@@ -109,7 +109,7 @@ public:
         auto *remote_channel = new Channel(reactor_, fd, -1);
         is_ok                = (remote_channel != nullptr);
         if (is_ok) {
-          Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, _1, _2, sid);
+          Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, conv, _1, _2, sid);
           remote_channel->set_read_callback(cb);
           channels_[sid] = remote_channel;
         }
@@ -117,19 +117,19 @@ public:
       unsigned char rsp[16];
       int           rsp_size = socks5::prepare_response(rsp, is_ok);
       codec_->encode(rsp, rsp_size);
-      return udp_.send(sid, const_cast<unsigned char *>(rsp), rsp_size);
+      return udp_.send(conv, sid, const_cast<unsigned char *>(rsp), rsp_size);
     }
   }
 
-  int remote_in(unsigned char *buffer, int size, int sid) {
+  int remote_in(int conv, unsigned char *buffer, int size, int sid) {
     LOG_INFO << "SID[" << sid << "] remote in " << size;
     codec_->encode(buffer, size);
-    return udp_.send(sid, buffer, size);
+    return udp_.send(conv, sid, buffer, size);
   }
 
 private:
   endpoint                           remote_;
-  udp                                udp_;
+  udp_server                         udp_;
   Reactor *                          reactor_;
   codec *                            codec_;
   std::unordered_map<int, Channel *> channels_;
@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  mlog::set_level(mlog::LogLevel::CRIT);
+  mlog::set_level(mlog::LogLevel::INFO);
 
   config run_config = parse_config(configFile, modeString);
   if (modeString == "server") {

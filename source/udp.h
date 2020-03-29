@@ -35,7 +35,7 @@ struct SessionHeader {
 
 class udp {
 public:
-  using SessionCallbck         = std::function<int(int, unsigned char *buffer, int size)>;
+  using SessionCallbck         = std::function<int(int, int, unsigned char *buffer, int size)>;
   const static int MTU         = 1376;  // The mss of default kcp
   const static int MAX_PAYLOAD = MTU - sizeof(SessionHeader);
 
@@ -47,16 +47,16 @@ public:
 
   void set_session_callback(SessionCallbck &cb);
 
-  int send(int sid, unsigned char *buffer, int size);
-  int write(unsigned char *buffer, int size);
+  virtual int send(int conv, int sid, unsigned char *buffer, int size);
+  virtual int write(int conv, unsigned char *buffer, int size);
 
 protected:
   ikcpcb *crtete_kcp(int conv);
 
-  int  read_socket(int fd);
-  void on_read(unsigned char *buffer, int size, sockaddr_in *target);
+  int          read_socket();
+  virtual void on_read(unsigned char *buffer, int size, sockaddr_in *target);
 
-private:
+protected:
   Reactor *       reactor_;
   int             fd_;
   int             ms_;
@@ -65,6 +65,24 @@ private:
   SessionCallbck *cb_;
   SessionHeader * segment_;
   unsigned char * recv_bufffer_;
+};
+
+class udp_server : public udp {
+public:
+  udp_server(Reactor *reactor, const char *addr, const char *remote_addr = nullptr)
+    : udp(reactor, addr, remote_addr) {}
+
+  int write(int conv, unsigned char *buffer, int size) override;
+  int send(int conv, int sid, unsigned char *buffer, int size) override;
+
+protected:
+  void on_read(unsigned char *buffer, int size, sockaddr_in *target) override;
+  bool connected_client(int conv);
+
+private:
+  std::unordered_map<endpoint, ikcpcb *> client_conv_;
+  std::unordered_map<int, endpoint>      conv_ep_;
+  std::unordered_map<int, ikcpcb *>      conv_kcp_;
 };
 
 #endif  // KCPSS_UDP_H
