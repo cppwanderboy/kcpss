@@ -30,12 +30,8 @@
 
 std::set<Channel *> Channel::channels_;
 
-Acceptor::Acceptor(Reactor *reactor, EKcpDirection kcpDirection)
-  : kcpDirection_(kcpDirection)
-  , listenFd_(0)
-  , reactor_(reactor)
-  , connect_cb_(nullptr)
-  , disconnect_cb_(nullptr) {
+Acceptor::Acceptor(Reactor *reactor)
+  : listenFd_(0), reactor_(reactor), connect_cb_(nullptr), disconnect_cb_(nullptr) {
   if (!reactor_) {
     reactor_ = new Reactor;
   }
@@ -98,11 +94,7 @@ int Acceptor::accept() {
   socklen_t          nameLen   = sizeof(it);
   auto               channelFd = ::accept(listenFd_, (struct sockaddr *)&it, &nameLen);
 
-  int kcpConv = -1;
-  if (kcpDirection_ == OutKcp || kcpDirection_ == BothKcp) {
-    kcpConv = 0;
-  }
-  auto *channel = new Channel(reactor_, channelFd, kcpConv);
+  auto *channel = new Channel(reactor_, channelFd, -1);
   on_connect(channel);
 
   return 0;
@@ -146,7 +138,6 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   , ms_(0)
   , bytes_write_(0)
   , bytes_read_(0)
-  , kcp_mode_(EKcpMode::None)
   , connected_(false)
   , reconnect_count_(0) {
   LOG_INFO << __FUNCTION__ << " fd = " << fd_;
@@ -192,12 +183,6 @@ int Channel::on_connect(int kcpConv) {
 
   connected_ = true;
 
-  if (kcpConv > 0) {
-    kcp_mode_ = EKcpMode::Initiative;
-    init_kcp(kcpConv_);
-  } else if (kcpConv == 0) {
-    kcp_mode_ = EKcpMode::Passive;
-  }
   if (!send_buffer_.empty()) {
     write(send_buffer_.data(), send_buffer_.size());
     send_buffer_.clear();
@@ -274,18 +259,6 @@ bool Channel::set_read_callback(Channel::ReadCallbck &cb) {
 
 void Channel::on_read(unsigned char *buffer, int size) {
   LOG_INFO << "fd[" << fd() << "] on read " << size;
-  if (kcp_mode_ == Passive && bytes_read_ == 0) {
-    kcpConv_ = *(int *)buffer;
-    LOG_INFO << "[fd=" << fd_ << "] recv negotiate kcpConv=" << kcpConv_;
-    init_kcp(kcpConv_);
-    buffer += sizeof(int);
-    size -= sizeof(int);
-    bytes_read_ += size;
-    if (read_cb_) {
-      (*read_cb_)(buffer, size);
-    }
-    return;
-  }
   if (read_cb_) {
     if (kcp_ == nullptr) {
       bytes_read_ += size;
@@ -309,19 +282,6 @@ int Channel::write(unsigned char *buf, int size) {
     LOG_INFO << "write but fd[" << fd_ << "] not connected, push to buffer";
     send_buffer_.insert(send_buffer_.end(), buf, buf + size);
     return 0;
-  }
-  if (kcp_mode_ == Initiative && (bytes_write_ == 0)) {
-    LOG_INFO << "[fd=" << fd_ << "] send negotiate kcpConv=" << kcpConv_;
-    auto *data = new unsigned char[size + sizeof(int)];
-    int * conv = (int *)data;
-    *conv      = kcpConv_;
-    memcpy(data + sizeof(int), buf, size);
-    bytes_write_ += size;
-    size += sizeof(int);
-    LOG_INFO << "[fd=" << fd_ << "] send " << size;
-    int send = ::write(fd_, data, size);
-    delete[] data;
-    return send;
   }
   bytes_write_ += size;
   if (kcp_) {
