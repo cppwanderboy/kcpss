@@ -31,9 +31,14 @@
 std::set<Channel *> Channel::channels_;
 
 Acceptor::Acceptor(Reactor *reactor)
-  : listenFd_(0), reactor_(reactor), connect_cb_(nullptr), disconnect_cb_(nullptr) {
+  : listenFd_(0)
+  , reactor_(reactor)
+  , my_reactor_(nullptr)
+  , connect_cb_(nullptr)
+  , disconnect_cb_(nullptr) {
   if (!reactor_) {
-    reactor_ = new Reactor;
+    my_reactor_ = new Reactor;
+    reactor_    = my_reactor_;
   }
 }
 
@@ -45,6 +50,9 @@ Acceptor::~Acceptor() {
   if (disconnect_cb_) {
     delete disconnect_cb_;
     disconnect_cb_ = nullptr;
+  }
+  if (my_reactor_) {
+    delete my_reactor_;
   }
 }
 
@@ -304,6 +312,14 @@ Channel::~Channel() {
   channels_.erase(this);
   delete[] recv_buffer_;
   ::close(fd_);
+  if (read_cb_) {
+    delete read_cb_;
+    read_cb_ = nullptr;
+  }
+  if (disconnect_cb_) {
+    delete disconnect_cb_;
+    disconnect_cb_ = nullptr;
+  }
 }
 
 int Channel::update_kcp(int elapse) {

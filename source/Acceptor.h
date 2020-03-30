@@ -90,6 +90,7 @@ protected:
 private:
   int                listenFd_;
   Reactor *          reactor_;
+  Reactor *          my_reactor_;
   Channel::Callback *connect_cb_;
   Channel::Callback *disconnect_cb_;
 };
