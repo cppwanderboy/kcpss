@@ -87,11 +87,11 @@ int udp::send(int conv, int sid, unsigned char *buffer, int size) {
   }
   segment_->size = size;
   memcpy(segment_->data, buffer, size);
-  return ikcp_send(kcp_, (const char *)segment_, size + sizeof(SessionHeader));
+  return ikcp_send(kcp_, (const char *)segment_, size + SessionHeaderSize);
 }
 
 int udp::write(int conv, unsigned char *buffer, int size) {
-  LOG_INFO << conv << " write " << size;
+  LOG_INFO << "conv[" << conv << "] write " << size << " bytes";
   int len = sizeof(sockaddr);
   return ::sendto(fd_, buffer, size, 0, (struct sockaddr *)target_->sockaddr(), len);
 }
@@ -122,7 +122,7 @@ void udp::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
   LOG_DBUG << "fd[" << fd_ << "] on read " << size;
   if (kcp_) {
     ikcp_input(kcp_, reinterpret_cast<const char *>(buffer), size);
-    int payload_size = 0;
+    int payload_size;
     do {
       payload_size = ikcp_recv(kcp_, (char *)segment_, MTU);
       if (payload_size > 0) {
@@ -141,13 +141,23 @@ void udp::set_session_callback(udp::SessionCallbck &cb) {
 }
 
 void udp_server::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
-  LOG_INFO << "fd[" << fd() << "] on read " << size;
   endpoint ep(*target);
-  ikcpcb * kcp  = nullptr;
+  ikcpcb * kcp;
   int      conv = ikcp_getconv(buffer);
+  LOG_INFO << "read " << size << " bytes from " << ep.host() << ":" << ep.port() << " conv[" << conv
+           << "] fd[" << fd() << "]";
   if (!connected_client(conv)) {
+    if (client_conv_.find(ep) != client_conv_.end()) {
+      auto *old_kcp  = client_conv_[ep];
+      auto  old_conv = old_kcp->conv;
+      LOG_INFO << "Release old kcp conv=" << old_conv << ", target=" << ep.host() << ":"
+               << ep.port();
+      ikcp_release(old_kcp);
+      conv_ep_.erase(old_conv);
+      conv_kcp_.erase(old_conv);
+    }
     kcp = crtete_kcp(conv);
-    LOG_INFO << "new kcp conv=" << conv << ", target=" << ep.host() << ":" << ep.port();
+    LOG_INFO << "new kcp conv[" << conv << "] from " << ep.host() << ":" << ep.port();
     client_conv_[ep] = kcp;
     conv_kcp_[conv]  = kcp;
     conv_ep_[conv]   = ep;
@@ -155,21 +165,27 @@ void udp_server::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
     kcp         = conv_kcp_[conv];
     auto old_ep = conv_ep_[conv];
     if (!(old_ep == ep)) {
+      LOG_INFO << "end point changed";
       conv_ep_[conv]   = ep;
       client_conv_[ep] = kcp;
     }
   }
   if (kcp) {
     ikcp_input(kcp, reinterpret_cast<const char *>(buffer), size);
-    int payload_size = 0;
+    int payload_size;
     do {
       payload_size = ikcp_recv(kcp, (char *)segment_, MTU);
       if (payload_size > 0) {
         if (cb_) {
           (*cb_)(kcp->conv, segment_->sid, segment_->data, segment_->size);
         }
+      } else {
+        LOG_INFO << "invalid payload size " << payload_size;
       }
     } while (payload_size >= 0);
+  } else {
+    LOG_CRIT << "no kcp found for " << ep.host() << ":" << ep.port() << " conv[" << conv << "] fd["
+             << fd() << "]";
   }
 }
 bool udp_server::connected_client(int conv) {
@@ -183,7 +199,12 @@ int udp_server::write(int conv, unsigned char *buffer, int size) {
 int udp_server::send(int conv, int sid, unsigned char *buffer, int size) {
   segment_->sid  = sid;
   segment_->size = MAX_PAYLOAD;
-  ikcpcb *kcp    = conv_kcp_[conv];
+  if (conv_kcp_.find(conv) == conv_kcp_.end()) {
+    LOG_CRIT << "no kcp find for "
+             << " conv[" << conv << "] sid[" << sid << "]";
+    return -1;
+  }
+  ikcpcb *kcp = conv_kcp_[conv];
   while (size > MAX_PAYLOAD) {
     memcpy(segment_->data, buffer, MAX_PAYLOAD);
     ikcp_send(kcp, (const char *)segment_, MTU);
@@ -192,5 +213,5 @@ int udp_server::send(int conv, int sid, unsigned char *buffer, int size) {
   }
   segment_->size = size;
   memcpy(segment_->data, buffer, size);
-  return ikcp_send(kcp, (const char *)segment_, size + sizeof(SessionHeader));
+  return ikcp_send(kcp, (const char *)segment_, size + SessionHeaderSize);
 }
