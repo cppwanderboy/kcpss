@@ -32,6 +32,7 @@ struct SessionHeader {
   int           size;
   unsigned char data[];
 };
+constexpr int SessionHeaderSize = sizeof(SessionHeader);
 
 class udp {
 public:

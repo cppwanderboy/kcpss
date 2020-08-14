@@ -47,7 +47,7 @@ public:
   }
 
   int remote_in(int conv, int sid, unsigned char *buffer, int size) {
-    LOG_INFO << "SID[" << sid << "] local in " << size;
+    LOG_INFO << "conv[" << conv << " ] SID[" << sid << "] local in " << size << " bytes";
     codec_->decode(buffer, size);
     if (channels_.find(sid) != channels_.end()) {
       return Channel::write(channels_[sid], buffer, size);
@@ -89,7 +89,7 @@ public:
                const char *remote,
                Reactor *   reactor,
                codec *     codec = new null_codec)
-    : udp_(reactor, local), remote_(remote), reactor_(reactor), codec_(codec) {
+    : udp_(reactor, local), reactor_(reactor), codec_(codec) {
     codec_                 = codec ? codec : new null_codec;
     udp::SessionCallbck cb = std::bind(&proxy_server::loacl_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
@@ -98,9 +98,13 @@ public:
   int loacl_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_INFO << "SID[" << sid << "] local in " << size;
     codec_->decode(buffer, size);
-    bool new_request = channels_.find(sid) == channels_.end();
+    key_t key        = conv;
+    key              = (key << 32) | sid;
+    bool new_request = channels_.find(key) == channels_.end();
     if (!new_request) {
-      return Channel::write(channels_[sid], buffer, size);
+      LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
+               << "channel.size[" << channels_.size() << "]";
+      return Channel::write(channels_[key], buffer, size);
     } else {
       auto target = socks5::parser_endpoint_from_request(buffer, size);
       bool is_ok  = !target.is_null();
@@ -111,7 +115,7 @@ public:
         if (is_ok) {
           Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, conv, _1, _2, sid);
           remote_channel->set_read_callback(cb);
-          channels_[sid] = remote_channel;
+          channels_[key] = remote_channel;
         }
       }
       unsigned char rsp[16];
@@ -128,11 +132,11 @@ public:
   }
 
 private:
-  endpoint                           remote_;
-  udp_server                         udp_;
-  Reactor *                          reactor_;
-  codec *                            codec_;
-  std::unordered_map<int, Channel *> channels_;
+  using key_t = uint64_t;
+  udp_server                           udp_;
+  Reactor *                            reactor_;
+  codec *                              codec_;
+  std::unordered_map<key_t, Channel *> channels_;
 };
 
 void start_server(const config &proxy_config) {
