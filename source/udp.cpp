@@ -22,9 +22,10 @@
 
 #include "udp.h"
 #include "socket.h"
+#include "timeUtility.h"
 
 udp::udp(Reactor *reactor, const char *addr, const char *remote_addr)
-  : reactor_(reactor), ms_(0), kcp_(nullptr), target_(nullptr), cb_(nullptr) {
+  : reactor_(reactor), kcp_(nullptr), target_(nullptr), cb_(nullptr) {
   fd_ = socket::create_udp(addr);
 
   Reactor::Callback cb = std::bind(&udp::read_socket, this);
@@ -63,16 +64,16 @@ ikcpcb *udp::crtete_kcp(int conv) {
   LOG_INFO << "init kcp channel, kcpConv[" << conv << "]";
   ikcpcb *kcp = ikcp_create(conv, this);
   kcp->output = udp_socket_output;
-  ikcp_nodelay(kcp, 1, 10, 2, 1);
+  ikcp_nodelay(kcp, 1, 1, 2, 1);
   ikcp_wndsize(kcp, 4096, 4096);
 
   Reactor::Callback kcpCb = [=](int elapse) -> int {
     if (kcp) {
-      ikcp_update(kcp, ms_ += 10);
+      ikcp_update(kcp, now_ms());
     }
     return 0;
   };
-  reactor_->RegisterTimer(kcpCb, 19890, 10);
+  reactor_->RegisterTimer(kcpCb, 19890, 1);
   return kcp;
 }
 
