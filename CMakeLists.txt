@@ -89,7 +89,7 @@ file(GLOB_RECURSE depend_sources
     depends/kcp/*.c
     depends/snappy/*.cc)
 
-link_libraries(ev pthread)
+link_libraries(ev pthread dl)
 
 add_executable(kcpss ${kcp_sources} ${depend_sources})
 

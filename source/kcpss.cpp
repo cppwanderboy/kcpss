@@ -34,6 +34,8 @@ struct config {
   codec *     remote_codec{};
 };
 
+constexpr int heartbeat_sid = -1989;
+
 class proxy_client {
 public:
   proxy_client(const char *local,
@@ -44,10 +46,20 @@ public:
     codec_                 = codec ? codec : new null_codec;
     udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
+
+    Reactor::Callback heartbeat = [=](int elapse) -> int {
+      char const *kcpss{"kcpss"};
+      udp_.send(-1, heartbeat_sid, (unsigned char *)kcpss, sizeof(kcpss));
+      return 0;
+    };
+    reactor->RegisterTimer(heartbeat, 19890, 1000);
   }
 
   int remote_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_DBUG << "kcp://" << conv << ":" << sid << " remote in " << size << " bytes";
+    if (sid == heartbeat_sid) {
+      return 0;
+    }
     codec_->decode(buffer, size);
     if (channels_.find(sid) != channels_.end()) {
       return Channel::write(channels_[sid], buffer, size);
@@ -94,6 +106,9 @@ public:
 
   int local_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_DBUG << "kcp://" << conv << ":" << sid << " local in " << size << " bytes";
+    if (sid == heartbeat_sid) {
+      return 0;
+    }
     codec_->decode(buffer, size);
     key_t key         = (static_cast<uint64_t>(conv) << 32U) | static_cast<uint32_t>(sid);
     bool  new_request = channels_.find(key) == channels_.end();
@@ -191,12 +206,21 @@ config parse_config(const char *config_file, std::string &modeString) {
   return run_config;
 }
 
+bool file_exist(const char *fileName)
+{
+  std::ifstream infile(fileName);
+  return infile.good();
+}
+
 const char *usage = "Usage: %s [-s] [-c] [-h] [-v]\n";
 
 int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
 
-  const char *configFile = "./kcpss.ini";
+  const char *configFile = "/etc/kcpss.ini";
+  if (file_exist("./kcpss.ini")) {
+    configFile = "./kcpss.ini";
+  }
 
   std::string modeString;
   int         opt;

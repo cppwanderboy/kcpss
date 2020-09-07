@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "Acceptor.h"
+#include "timeUtility.h"
 #include <cerrno>
 #include <unistd.h>
 #include <sys/socket.h>
@@ -266,7 +267,7 @@ bool Channel::set_read_callback(Channel::ReadCallbck &cb) {
 }
 
 void Channel::on_read(unsigned char *buffer, int size) {
-  LOG_INFO << "fd:" << fd() << " on read " << size;
+  LOG_INFO << "fd:" << fd() << " read " << size << " bytes";
   if (read_cb_) {
     if (kcp_ == nullptr) {
       bytes_read_ += size;
@@ -296,7 +297,7 @@ int Channel::write(unsigned char *buf, int size) {
     return ikcp_send(kcp_, (char *)buf, size);
   } else {
     int flags = fcntl(fd_, F_GETFL, 0);
-    LOG_INFO << "fd:" << fd_ << " send " << size;
+    LOG_INFO << "fd:" << fd_ << " send " << size << " bytes";
     return ::write(fd_, buf, size);
   }
 }
@@ -324,7 +325,7 @@ Channel::~Channel() {
 
 int Channel::update_kcp(int elapse) {
   if (kcp_) {
-    ikcp_update(kcp_, ms_ += 10);
+    ikcp_update(kcp_, now_ms());
   }
   return 0;
 }
