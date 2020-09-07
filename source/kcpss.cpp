@@ -47,7 +47,7 @@ public:
   }
 
   int remote_in(int conv, int sid, unsigned char *buffer, int size) {
-    LOG_INFO << "conv[" << conv << " ] SID[" << sid << "] local in " << size << " bytes";
+    LOG_DBUG << "kcp://" << conv << ":" << sid << " remote in " << size << " bytes";
     codec_->decode(buffer, size);
     if (channels_.find(sid) != channels_.end()) {
       return Channel::write(channels_[sid], buffer, size);
@@ -56,7 +56,7 @@ public:
   }
 
   int local_in(int sid, unsigned char *buffer, int size) {
-    LOG_INFO << "SID[" << sid << "] local in " << size;
+    LOG_DBUG << "kcp://NULL:" << sid << " local in " << size << " bytes";
     if (socks5::is_hello(buffer, size)) {
       // fast return to skip socks5 negotiate & reduce 1 RTT time.
       socks5::echo_hello(buffer, &size);
@@ -68,7 +68,7 @@ public:
 
   int accepted(Channel *channel) {
     int sid = max_sid_++;
-    LOG_INFO << "Connection accept, fd=" << channel->fd() << ", sid=" << sid;
+    LOG_INFO << "Connection accept, fd[" << channel->fd() << "], sid[" << sid << "]";
     channels_[sid] = channel;
 
     Channel::ReadCallbck cb = std::bind(&proxy_client::local_in, this, sid, _1, _2);
@@ -85,22 +85,18 @@ private:
 
 class proxy_server {
 public:
-  proxy_server(const char *local,
-               const char *remote,
-               Reactor *   reactor,
-               codec *     codec = new null_codec)
+  proxy_server(const char *local, Reactor *reactor, codec *codec = new null_codec)
     : udp_(reactor, local), reactor_(reactor), codec_(codec) {
     codec_                 = codec ? codec : new null_codec;
-    udp::SessionCallbck cb = std::bind(&proxy_server::loacl_in, this, _1, _2, _3, _4);
+    udp::SessionCallbck cb = std::bind(&proxy_server::local_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
   }
 
-  int loacl_in(int conv, int sid, unsigned char *buffer, int size) {
-    LOG_INFO << "SID[" << sid << "] local in " << size;
+  int local_in(int conv, int sid, unsigned char *buffer, int size) {
+    LOG_DBUG << "kcp://" << conv << ":" << sid << " local in " << size << " bytes";
     codec_->decode(buffer, size);
-    key_t key        = conv;
-    key              = (key << 32) | sid;
-    bool new_request = channels_.find(key) == channels_.end();
+    key_t key         = (static_cast<uint64_t>(conv) << 32U) | static_cast<uint32_t>(sid);
+    bool  new_request = channels_.find(key) == channels_.end();
     if (!new_request) {
       LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
                << "channel.size[" << channels_.size() << "]";
@@ -126,7 +122,7 @@ public:
   }
 
   int remote_in(int conv, unsigned char *buffer, int size, int sid) {
-    LOG_INFO << "SID[" << sid << "] remote in " << size;
+    LOG_DBUG << "kcp://" << conv << ":" << sid << " remote in " << size << " bytes";
     codec_->encode(buffer, size);
     return udp_.send(conv, sid, buffer, size);
   }
@@ -141,8 +137,7 @@ private:
 
 void start_server(const config &proxy_config) {
   auto *       reactor = new Reactor;
-  proxy_server rsp(
-    proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
+  proxy_server rsp(proxy_config.local.c_str(), reactor, proxy_config.remote_codec);
   reactor->Run();
 }
 
@@ -175,6 +170,24 @@ config parse_config(const char *config_file, std::string &modeString) {
     run_config.remote = iniConfig.sections["client"]["remote"];
   }
   run_config.remote_codec = new fast_codec;
+
+  auto logLevel = iniConfig.sections["log"]["level"];
+  std::transform(logLevel.begin(), logLevel.end(), logLevel.begin(), [](unsigned char c) {
+    return std::tolower(c);
+  });
+  if (logLevel == "critical" || logLevel == "crit") {
+    mlog::set_level(mlog::LogLevel::CRIT);
+    LOG_CRIT << "[config] log-level = critical";
+  } else if (logLevel == "warn" || logLevel == "warning") {
+    mlog::set_level(mlog::LogLevel::WARN);
+    LOG_CRIT << "[config] log-level = warning";
+  } else if (logLevel == "info") {
+    mlog::set_level(mlog::LogLevel::INFO);
+    LOG_CRIT << "[config] log-level = info";
+  } else if (logLevel == "debug" || logLevel == "dbug") {
+    mlog::set_level(mlog::LogLevel::DBUG);
+    LOG_CRIT << "[config] log-level = debug";
+  }
   return run_config;
 }
 

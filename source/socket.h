@@ -27,7 +27,7 @@
 
 class endpoint {
 public:
-  endpoint() : path_(""), port_(0), host_("") { memset(&sockaddr_, 0, sizeof(struct sockaddr_in)); }
+  endpoint() : port_(0) { memset(&sockaddr_, 0, sizeof(struct sockaddr_in)); }
   endpoint(const char *path) : path_(path) {
     char         type[32]  = {0};
     char         host[256] = {0};
@@ -91,6 +91,12 @@ private:
   std::string        path_;
   struct sockaddr_in sockaddr_ {};
 };
+
+template<typename STREAM>
+inline STREAM &operator<<(STREAM &s, const endpoint &ep) {
+  s << "=>" << ep.host() << ":" << ep.port();
+  return s;
+}
 
 class socket {
 public:

@@ -21,7 +21,8 @@ jobs:
             CC: clang
 
     steps:
-    - uses: actions/checkout@v2
+    - name: Checkout
+      uses: actions/checkout@v2
 
     - name: install on linux
       run: sudo apt-get -y install libev-dev

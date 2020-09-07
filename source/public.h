@@ -53,10 +53,10 @@ using std::placeholders::_3;
 using std::placeholders::_4;
 using std::placeholders::_5;
 
-const static size_t SIZE_1M  = 1024 * 1024;
-const static size_t SIZE_4M  = SIZE_1M * 4;
-const static size_t SIZE_16M = SIZE_1M * 16;
-const static size_t SIZE_64M = SIZE_1M * 64;
+constexpr size_t SIZE_1M  = 1024 * 1024;
+constexpr size_t SIZE_4M  = SIZE_1M * 4;
+constexpr size_t SIZE_16M = SIZE_1M * 16;
+constexpr size_t SIZE_64M = SIZE_1M * 64;
 
 inline void dump(unsigned char *buf, int len, const char *tag) {
   printf("\n%s Start [%d] ===============\n", tag, len);
