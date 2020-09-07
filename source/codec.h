@@ -38,27 +38,6 @@ public:
   void decode(unsigned char *buffer, int size) override {}
 };
 
-class simple_codec : public codec {
-public:
-  void encode(unsigned char *buffer, int size) override {
-    for (int i = 0; i < size; ++i) {
-      uint8_t ch = buffer[i];
-      buffer[i]  = g_encoder[ch];
-    }
-  }
-
-  void decode(unsigned char *buffer, int size) override {
-    for (int i = 0; i < size; ++i) {
-      unsigned char ch = buffer[i];
-      buffer[i]        = g_decoder[ch];
-    }
-  }
-
-private:
-  static const uint8_t g_encoder[];
-  static const uint8_t g_decoder[];
-};
-
 class fast_codec : public codec {
 public:
   void encode(unsigned char *buffer, int size) override {

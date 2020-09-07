@@ -148,7 +148,7 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   , bytes_read_(0)
   , connected_(false)
   , reconnect_count_(0) {
-  LOG_INFO << __FUNCTION__ << " fd = " << fd_;
+  LOG_INFO << "fd:" << fd_ << "create new channel";
 
   recv_buffer_ = new unsigned char[SIZE_16M];
   send_buffer_.reserve(SIZE_1M);
@@ -239,7 +239,7 @@ int check_connections(int flag, Channel *channel) {
 }
 
 int Channel::on_disconnect() {
-  LOG_INFO << " Channel[fd=" << fd_ << "] disconnected";
+  LOG_INFO << "fd:" << fd_ << " disconnected";
   if (disconnect_cb_) {
     (*disconnect_cb_)(this);
   }
@@ -266,7 +266,7 @@ bool Channel::set_read_callback(Channel::ReadCallbck &cb) {
 }
 
 void Channel::on_read(unsigned char *buffer, int size) {
-  LOG_INFO << "fd[" << fd() << "] on read " << size;
+  LOG_INFO << "fd:" << fd() << " on read " << size;
   if (read_cb_) {
     if (kcp_ == nullptr) {
       bytes_read_ += size;
@@ -296,7 +296,7 @@ int Channel::write(unsigned char *buf, int size) {
     return ikcp_send(kcp_, (char *)buf, size);
   } else {
     int flags = fcntl(fd_, F_GETFL, 0);
-    LOG_INFO << "[fd=" << fd_ << "] send " << size;
+    LOG_INFO << "fd:" << fd_ << " send " << size;
     return ::write(fd_, buf, size);
   }
 }
