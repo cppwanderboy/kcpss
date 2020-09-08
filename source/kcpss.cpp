@@ -113,10 +113,10 @@ public:
     key_t key         = (static_cast<uint64_t>(conv) << 32U) | static_cast<uint32_t>(sid);
     bool  new_request = channels_.find(key) == channels_.end();
     if (!new_request) {
-      LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
-               << "channel.size[" << channels_.size() << "]";
       return Channel::write(channels_[key], buffer, size);
     } else {
+      LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
+               << "channel.size[" << channels_.size() << "]";
       auto target = socks5::parser_endpoint_from_request(buffer, size);
       bool is_ok  = !target.is_null();
       if (is_ok) {
@@ -126,6 +126,18 @@ public:
         if (is_ok) {
           Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, conv, _1, _2, sid);
           remote_channel->set_read_callback(cb);
+          Channel::Callback rmMap = [this](Channel *channel) -> int {
+            for (auto pair : channels_) {
+              if (pair.second == channel) {
+                channels_.erase(pair.first);
+                LOG_INFO << "remove proxy client channel, "
+                         << "channel.size[" << channels_.size() << "]";
+                break;
+              }
+            }
+            return 0;
+          };
+          remote_channel->set_disconnect_callback(rmMap);
           channels_[key] = remote_channel;
         }
       }
@@ -206,8 +218,7 @@ config parse_config(const char *config_file, std::string &modeString) {
   return run_config;
 }
 
-bool file_exist(const char *fileName)
-{
+bool file_exist(const char *fileName) {
   std::ifstream infile(fileName);
   return infile.good();
 }

@@ -149,7 +149,7 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   , bytes_read_(0)
   , connected_(false)
   , reconnect_count_(0) {
-  LOG_INFO << "fd:" << fd_ << "create new channel";
+  LOG_INFO << "fd:" << fd_ << " create new channel";
 
   recv_buffer_ = new unsigned char[SIZE_16M];
   send_buffer_.reserve(SIZE_1M);
@@ -252,7 +252,7 @@ int Channel::on_disconnect() {
 
 bool Channel::set_disconnect_callback(Channel::Callback &cb) {
   //  fprintf(stderr, "Channel::%s fd[%d]\n", __FUNCTION__, fd_);
-  if (disconnect_cb_) {
+  if (!disconnect_cb_) {
     disconnect_cb_ = new Callback(cb);
   }
   return true;
