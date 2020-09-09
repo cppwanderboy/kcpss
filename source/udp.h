@@ -60,7 +60,6 @@ protected:
 protected:
   Reactor *       reactor_;
   int             fd_;
-  int             ms_;
   ikcpcb *        kcp_;
   endpoint *      target_;
   SessionCallbck *cb_;

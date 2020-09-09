@@ -31,7 +31,7 @@
 struct config {
   std::string local;
   std::string remote;
-  codec *     remote_codec{};
+  codec *     remote_codec{new null_codec};
 };
 
 constexpr int heartbeat_sid = -1989;
@@ -43,7 +43,6 @@ public:
                Reactor *   reactor,
                codec *     codec = new null_codec)
     : udp_(reactor, local, remote), codec_(codec), max_sid_(0) {
-    codec_                 = codec ? codec : new null_codec;
     udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
 
@@ -202,25 +201,23 @@ config parse_config(const char *config_file, std::string &modeString) {
   std::transform(logLevel.begin(), logLevel.end(), logLevel.begin(), [](unsigned char c) {
     return std::tolower(c);
   });
+  mlog::LogLevel level = mlog::LogLevel::INFO;
   if (logLevel == "critical" || logLevel == "crit") {
-    mlog::set_level(mlog::LogLevel::CRIT);
-    LOG_CRIT << "[config] log-level = critical";
+    level = mlog::LogLevel::CRIT;
   } else if (logLevel == "warn" || logLevel == "warning") {
-    mlog::set_level(mlog::LogLevel::WARN);
-    LOG_CRIT << "[config] log-level = warning";
+    level = mlog::LogLevel::WARN;
   } else if (logLevel == "info") {
-    mlog::set_level(mlog::LogLevel::INFO);
-    LOG_CRIT << "[config] log-level = info";
+    level = mlog::LogLevel::INFO;
   } else if (logLevel == "debug" || logLevel == "dbug") {
-    mlog::set_level(mlog::LogLevel::DBUG);
-    LOG_CRIT << "[config] log-level = debug";
+    level = mlog::LogLevel::DBUG;
   }
+  mlog::set_level(level);
+  LOG_CRIT << "[config] log-level = " << mlog::mlog::level_str(level);
   return run_config;
 }
 
 bool file_exist(const char *fileName) {
-  std::ifstream infile(fileName);
-  return infile.good();
+  return std::ifstream(fileName).good();
 }
 
 const char *usage = "Usage: %s [-s] [-c] [-h] [-v]\n";
@@ -252,8 +249,6 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
   }
-
-  mlog::set_level(mlog::LogLevel::INFO);
 
   config run_config = parse_config(configFile, modeString);
   if (modeString == "server") {
