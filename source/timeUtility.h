@@ -23,7 +23,7 @@
 #ifndef KCPSS_TIMEUTILITY_H
 #define KCPSS_TIMEUTILITY_H
 #include <dlfcn.h>
-#include <time.h>
+#include <ctime>
 #include "mlog.h"
 
 typedef long (*clock_func_type)(clockid_t which_clock, struct timespec *tp);

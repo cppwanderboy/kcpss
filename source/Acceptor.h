@@ -30,6 +30,7 @@ class Channel {
 public:
   using Callback    = std::function<int(Channel *)>;
   using ReadCallbck = std::function<int(unsigned char *buffer, int size)>;
+  constexpr static int BUF_SIZE = SIZE_4M;
 
 public:
   Channel(Reactor *reactor, int fd, int kcpConv = -1);
@@ -61,11 +62,10 @@ protected:
   int                        fd_;
   int                        kcpConv_;
   ikcpcb *                   kcp_;
-  int                        ms_;
   size_t                     bytes_read_;
   size_t                     bytes_write_;
   static std::set<Channel *> channels_;
-  unsigned char *            recv_buffer_;
+  static unsigned char *     recv_buffer_;
   std::vector<unsigned char> send_buffer_;
   int                        reconnect_count_;
 };

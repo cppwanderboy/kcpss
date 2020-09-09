@@ -72,7 +72,7 @@ struct mlog {
     return *out;
   }
   static LogLevel &level() {
-    static LogLevel outlevel_;
+    static LogLevel outlevel_{LogLevel::INFO};
     return outlevel_;
   }
   static const char *level_str(LogLevel level) {

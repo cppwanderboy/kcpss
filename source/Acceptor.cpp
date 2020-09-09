@@ -30,6 +30,7 @@
 #include <sys/types.h>
 
 std::set<Channel *> Channel::channels_;
+unsigned char *Channel::recv_buffer_ = new unsigned char[SIZE_4M];
 
 Acceptor::Acceptor(Reactor *reactor)
   : listenFd_(0)
@@ -144,14 +145,12 @@ Channel::Channel(Reactor *reactor, int fd, int kcpConv)
   , disconnect_cb_(nullptr)
   , kcpConv_(kcpConv)
   , kcp_(nullptr)
-  , ms_(0)
   , bytes_write_(0)
   , bytes_read_(0)
   , connected_(false)
   , reconnect_count_(0) {
   LOG_INFO << "fd:" << fd_ << " create new channel";
 
-  recv_buffer_ = new unsigned char[SIZE_16M];
   send_buffer_.reserve(SIZE_1M);
   channels_.insert(this);
 
@@ -210,12 +209,11 @@ void Channel::init_kcp(int conv) {
   kcp_->output            = socket_output;
   kcp_->logmask           = 15;
   kcp_->writelog          = writelog;
-  ikcp_nodelay(kcp_, 10, 20, 2, 1);
+  ikcp_nodelay(kcp_, 1, 1, 2, 1);
   reactor_->RegisterTimer(kcpCb, 19890, 10);
 }
 
 int Channel::read(int fd) {
-  const static int BUF_SIZE = SIZE_16M;
   while (connected_) {
     ssize_t ret = ::read(fd_, recv_buffer_, BUF_SIZE);
     if (ret <= 0) {
@@ -277,7 +275,7 @@ void Channel::on_read(unsigned char *buffer, int size) {
     ikcp_input(kcp_, (char *)buffer, size);
     int payload_size = 0;
     do {
-      payload_size = ikcp_recv(kcp_, (char *)recv_buffer_, SIZE_16M);
+      payload_size = ikcp_recv(kcp_, (char *)recv_buffer_, BUF_SIZE);
       if (payload_size > 0) {
         bytes_read_ += payload_size;
         (*read_cb_)(recv_buffer_, payload_size);
@@ -311,7 +309,6 @@ Channel::~Channel() {
   }
   reactor_->RemoveIO(fd_);
   channels_.erase(this);
-  delete[] recv_buffer_;
   ::close(fd_);
   if (read_cb_) {
     delete read_cb_;
