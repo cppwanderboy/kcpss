@@ -42,10 +42,6 @@ public:
   void RegisterTimer(Callback &handler, int evId, double elapse, double after = 0);
   void RemoveTimer(int evId);
 
-  // Events
-  //  bool Post(CEventHandler *handler, int evId, int dwParam, void *pParam);
-  //  int Send(CEventHandler *handler, int evId, int dwParam, void *pParam);
-
 protected:
   struct ev_loop *                    loop_;
   std::unordered_map<int, ev_timer *> timers_;

@@ -3,7 +3,7 @@ project(kcpss)
 
 # version info ================================================================
 set(kcpss_VERSION_MAJOR 0)
-set(kcpss_VERSION_MINOR 1)
+set(kcpss_VERSION_MINOR 2)
 set(kcpss_VERSION_PATCH 0)
 
 string(TIMESTAMP BUILDTIME "%Y%m%d-%H:%M:%S")
@@ -107,6 +107,7 @@ endif ()
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
 install(TARGETS kcpss DESTINATION bin)
 install(FILES bin/kcpss.ini DESTINATION etc)
+install(FILES service/kcpssd.service DESTINATION etc/systemd/system/)
 
 # packing =====================================================================
 set(CPACK_PACKAGE_NAME "kcpss")

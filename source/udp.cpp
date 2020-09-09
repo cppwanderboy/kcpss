@@ -207,7 +207,7 @@ int udp_server::send(int conv, int sid, unsigned char *buffer, int size) {
   segment_->sid  = sid;
   segment_->size = MAX_PAYLOAD;
   if (conv_kcp_.find(conv) == conv_kcp_.end()) {
-    LOG_CRIT << "no kcp found for conv[" << conv << "] sid[" << sid << "]";
+    LOG_WARN << "no kcp found for conv[" << conv << "] sid[" << sid << "]";
     return -1;
   }
   ikcpcb *kcp = conv_kcp_[conv];

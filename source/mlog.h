@@ -103,9 +103,9 @@ inline void set_level(const LogLevel &level) {
 }
 }  // namespace mlog
 
-#define LOG_DBUG mlog::mlog::debug() << __FILE__ << ":" << __LINE__ << " "
-#define LOG_INFO mlog::mlog::info() << __FILE__ << ":" << __LINE__ << " "
-#define LOG_WARN mlog::mlog::warn() << __FILE__ << ":" << __LINE__ << " "
-#define LOG_CRIT mlog::mlog::crit() << __FILE__ << ":" << __LINE__ << " "
+#define LOG_DBUG mlog::mlog::debug() << ""
+#define LOG_INFO mlog::mlog::info()
+#define LOG_WARN mlog::mlog::warn()
+#define LOG_CRIT mlog::mlog::crit()
 
 #endif  // KCPSS_MLOG_H

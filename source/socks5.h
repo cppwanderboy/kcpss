@@ -24,7 +24,7 @@
 
 class socks5 {
 public:
-  static bool is_hello(unsigned char *buffer, int size) {
+  static bool is_hello(const unsigned char *buffer, int size) {
     return size == 3 && buffer[0] == 5 && buffer[1] == 1;
   }
   static void echo_hello(unsigned char *buffer, int *size) {

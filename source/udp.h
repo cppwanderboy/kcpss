@@ -69,8 +69,7 @@ protected:
 
 class udp_server : public udp {
 public:
-  udp_server(Reactor *reactor, const char *addr, const char *remote_addr = nullptr)
-    : udp(reactor, addr, remote_addr) {}
+  using udp::udp;
 
   int write(int conv, unsigned char *buffer, int size) override;
   int send(int conv, int sid, unsigned char *buffer, int size) override;
