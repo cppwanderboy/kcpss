@@ -46,13 +46,6 @@ static void io_callback(EV_P_ ev_io *w, int revents) {
   }
 }
 
-// static void async_callback(struct ev_loop *loop, ev_async *w, int revents) {
-//  auto *handler = (CEventHandler *) w->data;
-//  if (handler) {
-//    handler->PostEvent(0, 0, nullptr);
-//  }
-//}
-
 void Reactor::Run() {
   ev_run(loop_, 0);
 }
@@ -73,6 +66,7 @@ void Reactor::RemoveTimer(int evId) {
   auto *timer = timers_[evId];
   if (timer) {
     ev_timer_stop(loop_, timer);
+    delete (((TimerInfo *)timer->data)->handler);
     delete ((TimerInfo *)timer->data);
     delete (timer);
   }
@@ -94,18 +88,3 @@ void Reactor::RemoveIO(int fd) {
     delete (io);
   }
 }
-
-// bool Reactor::Post(CEventHandler *handler, int evId, int dwParam, void
-// *pParam) {
-//  auto *async = new ev_async;
-//  async->data = handler;
-//  ev_init(async, async_callback);
-//  ev_async_send(loop_, async);
-//  return false;
-//}
-//
-// int Reactor::Send(CEventHandler *handler, int evId, int dwParam, void
-// *pParam) {
-//  handler->SendEvent(evId, dwParam, pParam);
-//  return 0;
-//}

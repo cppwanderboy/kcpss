@@ -30,7 +30,7 @@
 #include <sys/types.h>
 
 std::set<Channel *> Channel::channels_;
-unsigned char *Channel::recv_buffer_ = new unsigned char[SIZE_4M];
+unsigned char *     Channel::recv_buffer_ = new unsigned char[SIZE_4M];
 
 Acceptor::Acceptor(Reactor *reactor)
   : listenFd_(0)
@@ -55,6 +55,7 @@ Acceptor::~Acceptor() {
   }
   if (my_reactor_) {
     delete my_reactor_;
+    my_reactor_ = nullptr;
   }
 }
 

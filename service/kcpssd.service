@@ -1,0 +1,19 @@
+[Unit]
+Description=A socks5 proxy over udp
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+ExecStart=/usr/bin/kcpss -s
+Restart=on-failure
+RestartSec=5s
+#LimitCORE=infinity
+LimitCORE=0
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=99
+
+[Install]
+WantedBy=multi-user.target

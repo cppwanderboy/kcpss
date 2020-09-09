@@ -28,7 +28,7 @@
 #include "Acceptor.h"
 #include "socks5.h"
 
-struct config {
+struct proxy_config {
   std::string local;
   std::string remote;
   codec *     remote_codec{new null_codec};
@@ -113,38 +113,37 @@ public:
     bool  new_request = channels_.find(key) == channels_.end();
     if (!new_request) {
       return Channel::write(channels_[key], buffer, size);
-    } else {
-      LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
-               << "channel.size[" << channels_.size() << "]";
-      auto target = socks5::parser_endpoint_from_request(buffer, size);
-      bool is_ok  = !target.is_null();
-      if (is_ok) {
-        int   fd             = socket::create_tcp(target);
-        auto *remote_channel = new Channel(reactor_, fd, -1);
-        is_ok                = (remote_channel != nullptr);
-        if (is_ok) {
-          Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, conv, _1, _2, sid);
-          remote_channel->set_read_callback(cb);
-          Channel::Callback rmMap = [this](Channel *channel) -> int {
-            for (auto pair : channels_) {
-              if (pair.second == channel) {
-                channels_.erase(pair.first);
-                LOG_INFO << "remove proxy client channel, "
-                         << "channel.size[" << channels_.size() << "]";
-                break;
-              }
-            }
-            return 0;
-          };
-          remote_channel->set_disconnect_callback(rmMap);
-          channels_[key] = remote_channel;
-        }
-      }
-      unsigned char rsp[16];
-      int           rsp_size = socks5::prepare_response(rsp, is_ok);
-      codec_->encode(rsp, rsp_size);
-      return udp_.send(conv, sid, const_cast<unsigned char *>(rsp), rsp_size);
     }
+    LOG_INFO << "create channel for conv[" << conv << "] sid[" << sid << "], "
+             << "channel.size[" << channels_.size() << "]";
+    auto target = socks5::parser_endpoint_from_request(buffer, size);
+    bool is_ok  = !target.is_null();
+    if (is_ok) {
+      int   fd     = socket::create_tcp(target);
+      auto *remote = new Channel(reactor_, fd, -1);
+      is_ok        = (remote != nullptr);
+      if (is_ok) {
+        Channel::ReadCallbck cb = std::bind(&proxy_server::remote_in, this, conv, _1, _2, sid);
+        remote->set_read_callback(cb);
+        Channel::Callback rmMap = [this](Channel *channel) -> int {
+          for (auto pair : channels_) {
+            if (pair.second == channel) {
+              channels_.erase(pair.first);
+              LOG_INFO << "remove proxy client channel, "
+                       << "channel.size[" << channels_.size() << "]";
+              break;
+            }
+          }
+          return 0;
+        };
+        remote->set_disconnect_callback(rmMap);
+        channels_[key] = remote;
+      }
+    }
+    unsigned char rsp[16];
+    int           rsp_size = socks5::prepare_response(rsp, is_ok);
+    codec_->encode(rsp, rsp_size);
+    return udp_.send(conv, sid, const_cast<unsigned char *>(rsp), rsp_size);
   }
 
   int remote_in(int conv, unsigned char *buffer, int size, int sid) {
@@ -161,39 +160,42 @@ private:
   std::unordered_map<key_t, Channel *> channels_;
 };
 
-void start_server(const config &proxy_config) {
+void start_server(const proxy_config &config) {
   auto *       reactor = new Reactor;
-  proxy_server rsp(proxy_config.local.c_str(), reactor, proxy_config.remote_codec);
+  proxy_server rsp(config.local.c_str(), reactor, config.remote_codec);
   reactor->Run();
 }
 
-void start_client(const config &proxy_config) {
+void start_client(const proxy_config &config) {
   auto *reactor = new Reactor;
   auto *server  = new Acceptor(reactor);
-  server->listen(endpoint(proxy_config.local.c_str()).port());
-  proxy_client rsp(
-    proxy_config.local.c_str(), proxy_config.remote.c_str(), reactor, proxy_config.remote_codec);
+  server->listen(endpoint(config.local.c_str()).port());
+  proxy_client      rsp(config.local.c_str(), config.remote.c_str(), reactor, config.remote_codec);
   Channel::Callback cb = std::bind(&proxy_client::accepted, &rsp, _1);
   server->set_connect_callback(cb);
   server->start();
 }
 
-config parse_config(const char *config_file, std::string &modeString) {
+proxy_config parse_config(const char *config_file, std::string &modeString) {
   inipp::Ini<char> iniConfig;
   std::ifstream    is(config_file);
   if (!is.is_open()) {
-    fprintf(stderr, "[Exit] Can't open config file %s\n", config_file);
+    LOG_CRIT << "[Exit] Can't open config file " << config_file;
     exit(0);
   }
+  LOG_CRIT << "Starting with config file " << config_file;
   iniConfig.parse(is);
 
-  config run_config;
+  proxy_config run_config;
   if (modeString == "server") {
     run_config.local  = iniConfig.sections["server"]["local"];
     run_config.remote = "";
+    LOG_CRIT << "Running as server listen on " << run_config.local;
   } else if (modeString == "client") {
     run_config.local  = iniConfig.sections["client"]["local"];
     run_config.remote = iniConfig.sections["client"]["remote"];
+    LOG_CRIT << "Running as client listen on " << run_config.local;
+    LOG_CRIT << "Running as client connect to " << run_config.remote;
   }
   run_config.remote_codec = new fast_codec;
 
@@ -212,7 +214,7 @@ config parse_config(const char *config_file, std::string &modeString) {
     level = mlog::LogLevel::DBUG;
   }
   mlog::set_level(level);
-  LOG_CRIT << "[config] log-level = " << mlog::mlog::level_str(level);
+  LOG_CRIT << "config log-level is " << mlog::mlog::level_str(level);
   return run_config;
 }
 
@@ -250,10 +252,10 @@ int main(int argc, char **argv) {
     }
   }
 
-  config run_config = parse_config(configFile, modeString);
+  proxy_config config = parse_config(configFile, modeString);
   if (modeString == "server") {
-    start_server(run_config);
+    start_server(config);
   } else if (modeString == "client") {
-    start_client(run_config);
+    start_client(config);
   }
 }
