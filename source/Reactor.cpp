@@ -66,8 +66,8 @@ void Reactor::RemoveTimer(int evId) {
   auto *timer = timers_[evId];
   if (timer) {
     ev_timer_stop(loop_, timer);
-    delete (((TimerInfo *)timer->data)->handler);
-    delete ((TimerInfo *)timer->data);
+    delete ((reinterpret_cast<TimerInfo *>(timer->data))->handler);
+    delete (reinterpret_cast<TimerInfo *>(timer->data));
     delete (timer);
   }
 }

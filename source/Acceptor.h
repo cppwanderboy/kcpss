@@ -28,8 +28,8 @@
 
 class Channel {
 public:
-  using Callback    = std::function<int(Channel *)>;
-  using ReadCallbck = std::function<int(unsigned char *buffer, int size)>;
+  using Callback                = std::function<int(Channel *)>;
+  using ReadCallbck             = std::function<int(unsigned char *buffer, int size)>;
   constexpr static int BUF_SIZE = SIZE_4M;
 
 public:

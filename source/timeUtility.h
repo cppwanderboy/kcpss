@@ -35,6 +35,7 @@ inline clock_func_type get_clock_func() {
   void *          vdso;
   clock_func_type ret;
 
+#ifdef __linux__
   vdso = dlopen("linux-vdso.so.1", RTLD_NOW | RTLD_NOLOAD);
   if (!vdso) {
     LOG_CRIT << "get_clock_func() cannot open linux-vdso.so.1!";
@@ -46,6 +47,9 @@ inline clock_func_type get_clock_func() {
     return system_clock_gettime;
   }
   return ret;
+#else
+  return system_clock_gettime;
+#endif
 }
 
 inline uint32_t now_ms() {
