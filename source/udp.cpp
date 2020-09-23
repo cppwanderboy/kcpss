@@ -69,7 +69,11 @@ ikcpcb *udp::crtete_kcp(int conv) {
 
   Reactor::Callback kcpCb = [=](int elapse) -> int {
     if (kcp) {
+      static uint64_t counter{0};
       ikcp_update(kcp, now_ms());
+      if (counter++ % 60000 == 0) {
+        LOG_INFO << "[RTT]" << kcp->rx_srtt << " ms";
+      }
     }
     return 0;
   };
@@ -121,9 +125,9 @@ int udp::read_socket() {
 }
 
 void udp::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
-  endpoint ep(*target);
-  LOG_DBUG << ep << "|" << fd() << "|" << kcp_->conv << " read " << size << " bytes";
   if (kcp_) {
+    endpoint ep(*target);
+    LOG_DBUG << ep << "|" << fd() << "|" << kcp_->conv << " read " << size << " bytes";
     ikcp_input(kcp_, reinterpret_cast<const char *>(buffer), size);
     int payload_size;
     do {

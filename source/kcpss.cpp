@@ -96,7 +96,9 @@ private:
 
 class proxy_server {
 public:
-  proxy_server(const char *local, Reactor *reactor, codec *codec = new null_codec)
+  explicit proxy_server(const char *local,
+                        codec *     codec   = new null_codec,
+                        Reactor *   reactor = new Reactor)
     : udp_(reactor, local), reactor_(reactor), codec_(codec) {
     codec_                 = codec ? codec : new null_codec;
     udp::SessionCallbck cb = std::bind(&proxy_server::local_in, this, _1, _2, _3, _4);
@@ -152,6 +154,12 @@ public:
     return udp_.send(conv, sid, buffer, size);
   }
 
+  void start() {
+    if (reactor_) {
+      reactor_->Run();
+    }
+  }
+
 private:
   using key_t = uint64_t;
   udp_server                           udp_;
@@ -161,9 +169,8 @@ private:
 };
 
 void start_server(const proxy_config &config) {
-  auto *       reactor = new Reactor;
-  proxy_server rsp(config.local.c_str(), reactor, config.remote_codec);
-  reactor->Run();
+  proxy_server rsp(config.local.c_str(), config.remote_codec);
+  rsp.start();
 }
 
 void start_client(const proxy_config &config) {
@@ -200,9 +207,9 @@ proxy_config parse_config(const char *config_file, std::string &modeString) {
   run_config.remote_codec = new fast_codec;
 
   auto logLevel = iniConfig.sections["log"]["level"];
-  std::transform(logLevel.begin(), logLevel.end(), logLevel.begin(), [](unsigned char c) {
-    return std::tolower(c);
-  });
+  for (auto &ch : logLevel) {
+    ch = std::tolower(ch);
+  }
   mlog::LogLevel level = mlog::LogLevel::INFO;
   if (logLevel == "critical" || logLevel == "crit") {
     level = mlog::LogLevel::CRIT;
