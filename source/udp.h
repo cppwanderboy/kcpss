@@ -52,7 +52,7 @@ public:
   virtual int write(int conv, unsigned char *buffer, int size);
 
 protected:
-  ikcpcb *crtete_kcp(int conv);
+  ikcpcb *create_kcp(int conv);
 
   int          read_socket();
   virtual void on_read(unsigned char *buffer, int size, sockaddr_in *target);
