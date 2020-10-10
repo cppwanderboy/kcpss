@@ -64,7 +64,7 @@ protected:
   endpoint *      target_;
   SessionCallbck *cb_;
   SessionHeader * segment_;
-  unsigned char * recv_bufffer_;
+  unsigned char * recv_buffer_;
 };
 
 class udp_server : public udp {

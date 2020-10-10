@@ -42,11 +42,16 @@ public:
                const char *remote,
                Reactor *   reactor,
                codec *     codec = new null_codec)
-    : udp_(reactor, local, remote), codec_(codec), max_sid_(0) {
+    : udp_(reactor, local, remote), codec_(codec), max_sid_(0),last_ms_(now_ms()) {
     udp::SessionCallbck cb = std::bind(&proxy_client::remote_in, this, _1, _2, _3, _4);
     udp_.set_session_callback(cb);
 
     Reactor::Callback heartbeat = [=](int elapse) -> int {
+      auto now = now_ms();
+      if(now - last_ms_ > 60000){
+        LOG_WARN << "no message from server for 1 minutes, restart client!";
+        exit(-15);
+      }
       char const *kcpss{"kcpss"};
       udp_.send(-1, heartbeat_sid, (unsigned char *)kcpss, sizeof(kcpss));
       return 0;
@@ -57,6 +62,7 @@ public:
   int remote_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_DBUG << "kcp://" << conv << ":" << sid << " remote in " << size << " bytes";
     if (sid == heartbeat_sid) {
+      last_ms_ = now_ms();
       return 0;
     }
     codec_->decode(buffer, size);
@@ -92,6 +98,7 @@ private:
   codec *                            codec_;
   std::unordered_map<int, Channel *> channels_;
   int                                max_sid_;
+  uint32_t                           last_ms_;
 };
 
 class proxy_server {
@@ -108,6 +115,8 @@ public:
   int local_in(int conv, int sid, unsigned char *buffer, int size) {
     LOG_DBUG << "kcp://" << conv << ":" << sid << " local in " << size << " bytes";
     if (sid == heartbeat_sid) {
+      char const *kcpss{"kcpss"};
+      udp_.send(conv, heartbeat_sid, (unsigned char *)kcpss, sizeof(kcpss));
       return 0;
     }
     codec_->decode(buffer, size);
