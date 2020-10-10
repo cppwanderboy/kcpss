@@ -36,7 +36,7 @@ udp::udp(Reactor *reactor, const char *addr, const char *remote_addr)
   }
   std::random_device         rd;
   std::default_random_engine e(rd());
-  kcp_ = crtete_kcp(e());
+  kcp_ = create_kcp(e());
 
   segment_      = reinterpret_cast<SessionHeader *>(new char[MTU]);
   recv_bufffer_ = new unsigned char[SIZE_4M];
@@ -57,10 +57,14 @@ udp::~udp() {
 
 int udp_socket_output(const char *buf, int size, ikcpcb *kcp, void *fd) {
   auto *channel = reinterpret_cast<udp *>(fd);
-  return channel->write(kcp->conv, (unsigned char *)buf, size);
+  if (channel) {
+    return channel->write(kcp->conv, (unsigned char *)buf, size);
+  } else {
+    return -1;
+  }
 }
 
-ikcpcb *udp::crtete_kcp(int conv) {
+ikcpcb *udp::create_kcp(int conv) {
   LOG_INFO << "init kcp channel, kcpConv[" << conv << "]";
   ikcpcb *kcp = ikcp_create(conv, this);
   kcp->output = udp_socket_output;
@@ -77,7 +81,7 @@ ikcpcb *udp::crtete_kcp(int conv) {
     }
     return 0;
   };
-  reactor_->RegisterTimer(kcpCb, 19890, 1);
+  reactor_->RegisterTimer(kcpCb, conv, kcp->interval);
   return kcp;
 }
 
@@ -161,8 +165,9 @@ void udp_server::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
       ikcp_release(old_kcp);
       conv_ep_.erase(old_conv);
       conv_kcp_.erase(old_conv);
+      reactor_->RemoveTimer(old_conv);
     }
-    kcp = crtete_kcp(conv);
+    kcp = create_kcp(conv);
     LOG_INFO << "new kcp conv[" << conv << "] from " << ep.host() << ":" << ep.port();
     client_conv_[ep] = kcp;
     conv_kcp_[conv]  = kcp;

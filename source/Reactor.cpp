@@ -55,6 +55,7 @@ void Reactor::Stop(int nStopCode) {
 }
 
 void Reactor::RegisterTimer(Callback &handler, int evId, double elapse, double after) {
+  LOG_INFO << "RegisterTimer: " << evId;
   auto *timer = new ev_timer;
   timer->data = new TimerInfo{new Callback(handler), evId};
   ev_timer_init(timer, timer_callback, after, 0.001 * elapse);
@@ -63,6 +64,7 @@ void Reactor::RegisterTimer(Callback &handler, int evId, double elapse, double a
 }
 
 void Reactor::RemoveTimer(int evId) {
+  LOG_INFO << "RemoveTimer: " << evId;
   auto *timer = timers_[evId];
   if (timer) {
     ev_timer_stop(loop_, timer);
