@@ -1217,7 +1217,7 @@ int ikcp_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc) {
     if (interval > 5000)
       interval = 5000;
     else if (interval < 2)
-      interval = 2;
+      interval = 1;
     kcp->interval = interval;
   }
   if (resend >= 0) {

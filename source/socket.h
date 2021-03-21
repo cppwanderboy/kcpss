@@ -138,7 +138,7 @@ public:
       LOG_INFO << "socket successfully created, fd=" << fd << ", connect to " << ep.host() << ":"
                << ep.port();
       int flag    = 1;
-      int bufsize = SIZE_16M;
+      int bufsize = SIZE_1M / 2;
       setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
       setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
       setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));

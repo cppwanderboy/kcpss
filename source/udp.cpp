@@ -69,7 +69,8 @@ ikcpcb *udp::create_kcp(int conv) {
   ikcpcb *kcp = ikcp_create(conv, this);
   kcp->output = udp_socket_output;
   ikcp_nodelay(kcp, 1, 1, 2, 1);
-  ikcp_wndsize(kcp, 4096, 4096);
+  ikcp_wndsize(kcp, 2048, 2048);
+  kcp->rx_minrto = 200;
 
   Reactor::Callback kcpCb = [=](int elapse) -> int {
     if (kcp) {
