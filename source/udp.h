@@ -52,7 +52,7 @@ public:
   virtual int write(int conv, unsigned char *buffer, int size);
 
 protected:
-  ikcpcb *crtete_kcp(int conv);
+  ikcpcb *create_kcp(int conv);
 
   int          read_socket();
   virtual void on_read(unsigned char *buffer, int size, sockaddr_in *target);
@@ -64,7 +64,7 @@ protected:
   endpoint *      target_;
   SessionCallbck *cb_;
   SessionHeader * segment_;
-  unsigned char * recv_bufffer_;
+  unsigned char * recv_buffer_;
 };
 
 class udp_server : public udp {

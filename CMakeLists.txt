@@ -89,7 +89,8 @@ file(GLOB_RECURSE depend_sources
     depends/kcp/*.c
     depends/snappy/*.cc)
 
-link_libraries(ev pthread dl)
+link_libraries(pthread dl tcmalloc)
+link_libraries(libev.a)
 
 add_executable(kcpss ${kcp_sources} ${depend_sources})
 
@@ -104,12 +105,14 @@ if (EXISTS ${CLANG_FORMAT_BIN})
 endif ()
 
 # install =====================================================================
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
+#set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
+SET(CPACK_PACKAGING_INSTALL_PREFIX "/")
 install(TARGETS kcpss DESTINATION bin)
 install(FILES bin/kcpss.ini DESTINATION etc)
 install(FILES service/kcpssd.service DESTINATION etc/systemd/system/)
 
 # packing =====================================================================
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_PACKAGE_NAME "kcpss")
 set(CPACK_PACKAGE_VENDOR "Gui Yang(yanggui1989@gmail.com)")
 set(CPACK_PACKAGE_CONTACT "Gui Yang(yanggui1989@gmail.com)")
@@ -119,12 +122,13 @@ set(CPACK_PACKAGE_VERSION_MAJOR ${kcpss_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${kcpss_VERSION_MINOR})
 #set(CPACK_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION})
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "CPack Component Example")
+#set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.17), libgcc-s1 (>= 3.0), libgoogle-perftools4, libstdc++6 (>= 5.2)")
 
 set(CPACK_CMAKE_GENERATOR "Unix Makefiles")
-set(CPACK_GENERATOR "TGZ;RPM;DEB")
-set(CPACK_RPM_CHANGELOG_FILE "${CMAKE_SOURCE_DIR}/ChangeLog.txt")
-set(CPACK_RPM_PACKAGE_ARCHITECTURE ${CMAKE_SYSTEM_PROCESSOR})
-set(CPACK_RPM_PACKAGE_GROUP "Applications/Internet")
-set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY} ${RELEASE_DESCRIB})
+set(CPACK_GENERATOR "DEB")
+#set(CPACK_RPM_CHANGELOG_FILE "${CMAKE_SOURCE_DIR}/ChangeLog.txt")
+#set(CPACK_RPM_PACKAGE_ARCHITECTURE ${CMAKE_SYSTEM_PROCESSOR})
+#set(CPACK_RPM_PACKAGE_GROUP "Applications/Internet")
+#set(CPACK_RPM_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION_SUMMARY} ${RELEASE_DESCRIB})
 
 include(CPack)

@@ -36,10 +36,10 @@ udp::udp(Reactor *reactor, const char *addr, const char *remote_addr)
   }
   std::random_device         rd;
   std::default_random_engine e(rd());
-  kcp_ = crtete_kcp(e());
+  kcp_ = create_kcp(e());
 
   segment_      = reinterpret_cast<SessionHeader *>(new char[MTU]);
-  recv_bufffer_ = new unsigned char[SIZE_4M];
+  recv_buffer_  = new unsigned char[SIZE_4M];
 }
 
 udp::~udp() {
@@ -52,20 +52,25 @@ udp::~udp() {
     cb_ = nullptr;
   }
   delete[](char *) segment_;
-  delete[] recv_bufffer_;
+  delete[] recv_buffer_;
 }
 
 int udp_socket_output(const char *buf, int size, ikcpcb *kcp, void *fd) {
   auto *channel = reinterpret_cast<udp *>(fd);
-  return channel->write(kcp->conv, (unsigned char *)buf, size);
+  if (channel) {
+    return channel->write(kcp->conv, (unsigned char *)buf, size);
+  } else {
+    return -1;
+  }
 }
 
-ikcpcb *udp::crtete_kcp(int conv) {
+ikcpcb *udp::create_kcp(int conv) {
   LOG_INFO << "init kcp channel, kcpConv[" << conv << "]";
   ikcpcb *kcp = ikcp_create(conv, this);
   kcp->output = udp_socket_output;
   ikcp_nodelay(kcp, 1, 1, 2, 1);
-  ikcp_wndsize(kcp, 4096, 4096);
+  ikcp_wndsize(kcp, 2048, 2048);
+  kcp->rx_minrto = 200;
 
   Reactor::Callback kcpCb = [=](int elapse) -> int {
     if (kcp) {
@@ -77,7 +82,7 @@ ikcpcb *udp::crtete_kcp(int conv) {
     }
     return 0;
   };
-  reactor_->RegisterTimer(kcpCb, 19890, 1);
+  reactor_->RegisterTimer(kcpCb, conv, kcp->interval);
   return kcp;
 }
 
@@ -106,7 +111,7 @@ int udp::read_socket() {
   while (true) {
     sockaddr_in target{};
     socklen_t   len = sizeof(target);
-    ssize_t     ret = ::recvfrom(fd_, recv_bufffer_, SIZE_4M, 0, (sockaddr *)&target, &len);
+    ssize_t     ret = ::recvfrom(fd_, recv_buffer_, SIZE_4M, 0, (sockaddr *)&target, &len);
     if (target_ == nullptr) {
       target_ = new endpoint(target);
     }
@@ -115,10 +120,10 @@ int udp::read_socket() {
     } else if (ret == 0) {
       break;
     } else if (ret < SIZE_4M) {
-      on_read(recv_bufffer_, ret, &target);
+      on_read(recv_buffer_, ret, &target);
       break;
     } else if (ret == SIZE_4M) {
-      on_read(recv_bufffer_, ret, &target);
+      on_read(recv_buffer_, ret, &target);
     }
   }
   return 0;
@@ -161,8 +166,9 @@ void udp_server::on_read(unsigned char *buffer, int size, sockaddr_in *target) {
       ikcp_release(old_kcp);
       conv_ep_.erase(old_conv);
       conv_kcp_.erase(old_conv);
+      reactor_->RemoveTimer(old_conv);
     }
-    kcp = crtete_kcp(conv);
+    kcp = create_kcp(conv);
     LOG_INFO << "new kcp conv[" << conv << "] from " << ep.host() << ":" << ep.port();
     client_conv_[ep] = kcp;
     conv_kcp_[conv]  = kcp;
@@ -211,7 +217,7 @@ int udp_server::send(int conv, int sid, unsigned char *buffer, int size) {
   segment_->sid  = sid;
   segment_->size = MAX_PAYLOAD;
   if (conv_kcp_.find(conv) == conv_kcp_.end()) {
-    LOG_WARN << "no kcp found for conv[" << conv << "] sid[" << sid << "]";
+    LOG_INFO << "no kcp found for conv[" << conv << "] sid[" << sid << "]";
     return -1;
   }
   ikcpcb *kcp = conv_kcp_[conv];

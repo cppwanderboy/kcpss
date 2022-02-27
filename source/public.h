@@ -55,6 +55,7 @@ using std::placeholders::_4;
 using std::placeholders::_5;
 
 constexpr size_t SIZE_1M  = 1024 * 1024;
+constexpr size_t SIZE_2M  = SIZE_1M * 2;
 constexpr size_t SIZE_4M  = SIZE_1M * 4;
 constexpr size_t SIZE_16M = SIZE_1M * 16;
 constexpr size_t SIZE_64M = SIZE_1M * 64;
