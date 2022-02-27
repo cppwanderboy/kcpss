@@ -7,8 +7,8 @@ StartLimitIntervalSec=500
 StartLimitBurst=5
 
 [Service]
-ExecStart=/usr/bin/kcpss -s
-Restart=on-failure
+ExecStart=/usr/bin/kcpss -c
+Restart=always
 RestartSec=5s
 #LimitCORE=infinity
 LimitCORE=0
